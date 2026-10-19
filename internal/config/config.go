@@ -48,25 +48,25 @@ func (c Config) Validate() error {
 // Validate 校验 PostgreSQL 连接配置
 func (c PostgresConfig) Validate() error {
 	if strings.TrimSpace(c.Host) == "" {
-		return fmt.Errorf("postgres.host 不能为空")
+		return ErrPostgresHostRequired
 	}
 	if c.Port < 1 || c.Port > 65535 {
-		return fmt.Errorf("postgres.port 必须是 1–65535 的整数")
+		return ErrPostgresPortInvalid
 	}
 	if strings.TrimSpace(c.User) == "" {
-		return fmt.Errorf("postgres.user 不能为空")
+		return ErrPostgresUserRequired
 	}
 	if c.Password == "" {
-		return fmt.Errorf("postgres.password 不能为空")
+		return ErrPostgresPasswordRequired
 	}
 	if strings.TrimSpace(c.Database) == "" {
-		return fmt.Errorf("postgres.database 不能为空")
+		return ErrPostgresDatabaseRequired
 	}
 	switch c.SSLMode {
 	case "disable", "require", "verify-ca", "verify-full":
 		return nil
 	default:
-		return fmt.Errorf("postgres.sslmode 必须是 disable、require、verify-ca 或 verify-full")
+		return ErrPostgresSSLModeInvalid
 	}
 }
 
@@ -89,11 +89,11 @@ func (c GRPCConfig) Validate() error {
 func validateAddress(field, address string) error {
 	_, port, err := net.SplitHostPort(address)
 	if err != nil {
-		return fmt.Errorf("%s 必须是 host:port 格式: %w", field, err)
+		return fmt.Errorf("%s: %w", field, ErrAddressInvalid)
 	}
 	number, err := strconv.Atoi(port)
 	if err != nil || number < 1 || number > 65535 {
-		return fmt.Errorf("%s 端口必须是 1–65535 的整数", field)
+		return fmt.Errorf("%s: %w", field, ErrPortInvalid)
 	}
 	return nil
 }
@@ -104,7 +104,7 @@ type IDConfig struct {
 
 func (c IDConfig) Validate() error {
 	if c.NodeID < 0 || c.NodeID > 1023 {
-		return fmt.Errorf("id.node_id 必须是 0–1023 的整数")
+		return ErrNodeIDInvalid
 	}
 	return nil
 }

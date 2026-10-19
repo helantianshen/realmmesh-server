@@ -25,7 +25,7 @@ func New(cfg config.IDConfig) (*sonyflake.Sonyflake, error) {
 	}
 	generator, err := sonyflake.New(settings)
 	if err != nil {
-		return nil, fmt.Errorf("初始化 ID 生成器: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrInitialization, err)
 	}
 	return generator, nil
 }

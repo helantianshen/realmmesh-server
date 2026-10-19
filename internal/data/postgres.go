@@ -2,8 +2,6 @@ package data
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net"
 	"net/url"
 	"strconv"
@@ -53,20 +51,6 @@ func Migrate(ctx context.Context, db *gorm.DB) error {
 		return databaseError("迁移用户表", err)
 	}
 	return nil
-}
-
-func databaseError(operation string, err error) error {
-	if errors.Is(err, context.DeadlineExceeded) {
-		return fmt.Errorf("%s超时", operation)
-	}
-	if errors.Is(err, context.Canceled) {
-		return fmt.Errorf("%s已取消", operation)
-	}
-	var state interface{ SQLState() string }
-	if errors.As(err, &state) {
-		return fmt.Errorf("%s失败（SQLSTATE %s）", operation, state.SQLState())
-	}
-	return fmt.Errorf("%s失败，请检查数据库状态与连接配置", operation)
 }
 
 func postgresDSN(cfg config.PostgresConfig) string {
