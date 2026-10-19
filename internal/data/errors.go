@@ -22,3 +22,5 @@ func databaseError(operation string, err error) error {
 	}
 	return fmt.Errorf("%s: %w，请检查数据库状态与连接配置", operation, ErrDatabase)
 }
+
+var ErrSystemConfigInitialization = errors.New("初始化系统配置失败")

@@ -35,6 +35,7 @@ type PostgresConfig struct {
 	SSLMode  string `json:"sslmode"`
 }
 
+// Validate 逐项校验服务、数据库和 ID 配置
 func (c Config) Validate() error {
 	if err := c.Server.Validate(); err != nil {
 		return err
@@ -78,14 +79,17 @@ func (c ServerConfig) Validate() error {
 	return c.GRPC.Validate()
 }
 
+// Validate 校验 HTTP 监听地址和端口
 func (c HTTPConfig) Validate() error {
 	return validateAddress("server.http.addr", c.Addr)
 }
 
+// Validate 校验 gRPC 监听地址和端口
 func (c GRPCConfig) Validate() error {
 	return validateAddress("server.grpc.addr", c.Addr)
 }
 
+// validateAddress 校验主机端口格式及端口范围
 func validateAddress(field, address string) error {
 	_, port, err := net.SplitHostPort(address)
 	if err != nil {
@@ -102,6 +106,7 @@ type IDConfig struct {
 	NodeID int `json:"node_id"`
 }
 
+// Validate 校验中心实例的 ID 节点编号范围
 func (c IDConfig) Validate() error {
 	if c.NodeID < 0 || c.NodeID > 1023 {
 		return ErrNodeIDInvalid

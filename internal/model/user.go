@@ -6,6 +6,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// TableName 指定用户模型对应的数据库表名
 func (User) TableName() string {
 	return "users"
 }

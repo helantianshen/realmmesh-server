@@ -65,7 +65,7 @@ configs/config.yaml 是无密钥的本地示例，仅监听回环地址。机器
 
 跨仓库的交付状态与详细结果见相邻 realmmesh-mod 仓库的 docs/PHASE1_DELIVERY.md。
 
-第一阶段以及第二阶段前两小步的临时测试已按用户要求删除。当前 go test 仅检查包编译，不代表仍有自动回归用例；此前实际验证结果保留在任务记录中。
+第一阶段以及第二阶段前两小步的临时测试已按用户要求删除。前两步的测试不再作为自动回归用例；此前实际验证结果保留在任务记录中。注册步骤的测试见文末。
 
 
 ## PostgreSQL 与启动迁移
@@ -95,10 +95,49 @@ go build -o bin/realmmesh ./cmd/realmmesh
 
 ## 雪花 ID
 
-使用 github.com/sony/sonyflake/v2 v2.2.0，初始化位于 internal/idgen/sonyflake.go。固定采用 1ms 时间单位、12 位序列、10 位节点，时间起点为 2026-01-01 00:00:00 UTC。已有 ID 使用期间不能修改编码布局与起点。
+使用 github.com/sony/sonyflake/v2 v2.2.0，初始化位于 pkg/idgen/sonyflake.go。固定采用 1ms 时间单位、12 位序列、10 位节点，时间起点为 2026-01-01 00:00:00 UTC。已有 ID 使用期间不能修改编码布局与起点。
 
 配置 id.node_id，范围 0–1023；本机示例为 1，未配置时 Go 零值为合法节点 0。节点编号标识中心服务实例，与游戏服务器 server_id 无关。同一编号不能同时被多个生成器使用；不从 IP 自动分配，也不自动检测编号冲突。
 
 启动创建生成器并调用一次 NextID 自检，失败停止启动。尚未实现创建账户等业务入口，后续在启动入口将该生成器通过构造函数传给需要创建记录的组件；模型不挂自动生成 ID 的 GORM Hook，不使用全局生成器。数据库测试已覆盖生成 ID、显式赋值、写入和读取一致性。
 
 基础接入不持久化生成器状态。同节点快速重启、时钟倒退后重启可能重复，运行中回拨可能等待；不承诺这些情况下的唯一性或等待上限。数据库主键拒绝重复写入，不等于跨重启生成保证。HTTP JSON 的 ID 字符串表示留到对应接口实现时处理。
+
+
+## 错误处理约定
+
+各模块将固定错误集中放在自己的 errors.go 中，以 var ErrXxx = errors.New(...) 定义。调用方通过 errors.Is 判断类别，不比较错误字符串。需要补充字段、路径、操作上下文时使用 fmt.Errorf 和 %w 包装；这类上下文信息可以保留在调用处，不为每条日志创建独立错误。
+
+config/errors.go 定义配置校验错误，idgen/errors.go 定义初始化错误，data/errors.go 定义数据库错误及脱敏转换。数据库错误只暴露摘要和 SQLSTATE，取消/超时保留标准 context 错误身份。后续注册业务错误定义在 internal/biz/errors.go，传输层再映射 HTTP/gRPC 状态，不在业务层直接生成协议错误。
+
+
+## 中心注册业务
+
+internal/biz/registration.go 提供 NewRegistration 和 Register；传入 repo.NewUserRepository(db) 与共享 Sonyflake 实例。当前尚未接入 HTTP/RPC 或 Mod。调用顺序为名字/密码校验、Argon2id 哈希、雪花 ID、数据库插入。返回值只有 ID 与原始大小写名字，不返回密码哈希或提供管理员赋值入口。
+
+玩家名字限定 3–16 位 ASCII 英文字母、数字、下划线；密码限定 6–12 位英文字母、数字或 $%&@#^*!，不要求混合字符种类，不自动去空白或改大小写。唯一性由数据库 lower(player_name) 全表索引保障，已删除名字永久占用；只有该索引的 23505 错误映射为 ErrPlayerNameTaken。
+
+pkg/password 使用 Argon2id，内存 19456 KiB、2 轮、并行度 1、16 字节随机盐、32 字节输出，存储带版本和参数的编码串。Verify 只接受当前固定参数并使用常量时间比较；不支持任意参数或自动升级哈希。每个并发哈希约需 19 MiB 内存，当前未对外开放入口，接入传输层前需要明确并发限制。调用前后检查 context；已经开始的 Argon2 计算不能中途取消。
+
+注册错误位于 biz/errors.go，仓储错误位于 repo/errors.go，密码错误位于 password/errors.go，统一通过 errors.Is 判断。注册成功后的游戏连接登录状态、登录失败计数、TLS 和服务器凭证认证不在本步范围。
+
+本步数据库测试暂保留用于审查，可运行：
+
+```bash
+REALMMESH_TEST_CONFIG="$PWD/configs/config.local.yaml" go test -race -count=1 -v ./...
+```
+
+测试使用独立 schema，验证结束删除；不设置环境变量则跳过。此前两步已清理的测试仍仅保留历史结果。
+
+仓储独立位于 internal/repo，拥有仓储错误及脱敏转换；internal/data 只负责数据库连接和迁移。移动后实际 PostgreSQL 注册测试、race、vet 和构建复验通过。
+
+仓储依赖的字段及参数按职责命名，例如 userRepo、serverRepo，避免使用 users 等集合式命名。
+
+
+## 中心系统配置
+
+system_configs 由 model.SystemConfig 定义，id 使用雪花 ID，key 全表唯一。data.Migrate 在同一事务中执行表结构迁移及 data.InitSystemConfig；启动默认插入 auth.max_failures=3、auth.cooldown_seconds=300，key 冲突不覆盖已有值或更新时间。必需键被软删除、值非正整数或秒数超出 time.Duration 范围时启动失败，事务回滚。
+
+repo.SystemConfigRepository.LoginPolicy 每次以单次查询读取中心配置，不按游戏服区分，不在 YAML 保存策略。缺失项通过下次启动补齐；已存在但非法或软删除的配置需要明确修正，启动不静默重置。模型与初始化函数均有用途注释，仓储依赖命名为 systemConfigRepo。
+
+系统配置数据库测试位于 internal/data/system_config_test.go，使用 REALMMESH_TEST_CONFIG 执行，隔离 schema 及全部记录在事务结束后回滚。当前登录业务尚未接入这些配置，失败计数及 Mod kick 待下一步。

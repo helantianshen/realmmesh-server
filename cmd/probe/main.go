@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// main 解析探测参数并报告执行结果
 func main() {
 	addr := flag.String("addr", "127.0.0.1:9000", "gRPC 服务地址")
 	message := flag.String("message", "Hello RealmMesh", "回显消息")
@@ -22,6 +23,7 @@ func main() {
 	}
 }
 
+// run 调用 Echo 并核对响应，验证完成后关闭客户端连接
 func run(addr, message string) error {
 	conn, err := grpc.NewClient(
 		addr,

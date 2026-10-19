@@ -11,11 +11,12 @@ import (
 	"github.com/go-kratos/kratos/v3"
 	"github.com/helantianshen/realmmesh-server/internal/config"
 	"github.com/helantianshen/realmmesh-server/internal/data"
-	"github.com/helantianshen/realmmesh-server/internal/idgen"
 	"github.com/helantianshen/realmmesh-server/internal/server"
 	"github.com/helantianshen/realmmesh-server/internal/service"
+	"github.com/helantianshen/realmmesh-server/pkg/idgen"
 )
 
+// main 解析配置路径并在服务运行失败时退出
 func main() {
 	configPath := flag.String("conf", "configs/config.yaml", "配置文件路径")
 	flag.Parse()
@@ -24,6 +25,7 @@ func main() {
 	}
 }
 
+// run 初始化 ID 与数据库、执行迁移并运行服务，退出时关闭连接池
 func run(configPath string) (err error) {
 	// 加载配置文件
 	cfg, err := config.Load(configPath)
@@ -58,11 +60,11 @@ func run(configPath string) (err error) {
 		err = errors.Join(err, closeErr)
 	}()
 	// 执行数据库迁移
-	if err := data.Migrate(ctx, db); err != nil {
+	if err := data.Migrate(ctx, db, generator); err != nil {
 		return err
 	}
 	cancel()
-	log.Print("数据库连接与用户表迁移完成")
+	log.Print("数据库连接、表结构迁移与系统配置初始化完成")
 
 	// 初始化 HTTP 和 gRPC 服务端
 	probeHandler := &service.ProbeGRPCHandler{}

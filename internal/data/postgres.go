@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/url"
 	"strconv"
@@ -9,11 +10,13 @@ import (
 
 	"github.com/helantianshen/realmmesh-server/internal/config"
 	"github.com/helantianshen/realmmesh-server/internal/model"
+	"github.com/sony/sonyflake/v2"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
+// OpenPostgres 创建连接池并检查数据库连通性，连接失败时关闭连接池
 func OpenPostgres(ctx context.Context, cfg config.PostgresConfig) (*gorm.DB, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -40,19 +43,31 @@ func OpenPostgres(ctx context.Context, cfg config.PostgresConfig) (*gorm.DB, err
 	return db, nil
 }
 
-// Migrate 自动迁移表结构
-func Migrate(ctx context.Context, db *gorm.DB) error {
+// Migrate 在同一事务内迁移表结构并初始化系统配置
+func Migrate(ctx context.Context, db *gorm.DB, generator *sonyflake.Sonyflake) error {
+	// 事务回调返回错误时回滚，返回 nil 时提交表结构和配置数据
 	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return tx.AutoMigrate(
+		// 根据模型创建或调整表结构及索引，不删除模型中已移除的列
+		err := tx.AutoMigrate(
 			&model.User{},
+			&model.SystemConfig{},
 		)
+		if err != nil {
+			return databaseError("迁移表结构", err)
+		}
+		return InitSystemConfig(ctx, tx, generator)
 	})
-	if err != nil {
-		return databaseError("迁移用户表", err)
+	if err == nil {
+		return nil
 	}
-	return nil
+	// 回调中的错误已分类和脱敏，只转换事务开始或提交阶段的原始错误
+	if errors.Is(err, ErrSystemConfigInitialization) || errors.Is(err, ErrDatabase) {
+		return err
+	}
+	return databaseError("迁移数据库", err)
 }
 
+// postgresDSN 构造 PostgreSQL 连接串，并转义账号密码中的特殊字符
 func postgresDSN(cfg config.PostgresConfig) string {
 	address := url.URL{
 		Scheme: "postgres",
