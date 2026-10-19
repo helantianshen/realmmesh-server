@@ -1,11 +1,8 @@
 package config
 
 import (
-	"fmt"
-	"net"
-	"strconv"
-
 	"errors"
+	"fmt"
 
 	kconfig "github.com/go-kratos/kratos/v3/config"
 	"github.com/go-kratos/kratos/v3/config/file"
@@ -38,27 +35,4 @@ func Load(path string) (cfg *Config, err error) {
 	}
 
 	return &result, nil
-}
-
-// Validate 校验配置
-func (c Config) Validate() error {
-	if err := validateAddress("server.http.addr", c.Server.HTTP.Addr); err != nil {
-		return err
-	}
-
-	return validateAddress("server.grpc.addr", c.Server.GRPC.Addr)
-}
-
-func validateAddress(field, addr string) error {
-	_, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return fmt.Errorf("%s 必须是 host:port 格式: %w", field, err)
-	}
-
-	number, err := strconv.Atoi(port)
-	if err != nil || number < 1 || number > 65535 {
-		return fmt.Errorf("%s 端口必须是 1–65535 的整数", field)
-	}
-
-	return nil
 }

@@ -3,3 +3,13 @@ server:
     addr: "127.0.0.1:8000"
   grpc:
     addr: "127.0.0.1:9000"
+postgres:
+  host: "127.0.0.1"
+  port: 5432
+  user: "postgres"
+  database: "realmmesh"
+  password: "change-me"
+  sslmode: "disable"
+
+id:
+  node_id: 1
