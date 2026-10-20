@@ -46,11 +46,6 @@ type ServerInfo struct {
 	UpdatedAt  time.Time
 }
 
-// NewServerBiz 组装管理员校验、服务器仓储与共享 ID 生成器
-func NewServerBiz(userRepo *repo.UserRepository, serverRepo *repo.ServerRepository, ids *sonyflake.Sonyflake) *ServerBiz {
-	return &ServerBiz{userRepo: userRepo, serverRepo: serverRepo, ids: ids}
-}
-
 // Register 校验管理员及名称后生成凭证，只有数据库写入成功才交付原始密钥
 // actorID 必须来自已认证的管理入口，不能直接信任请求正文中的操作者 ID
 func (serverBiz *ServerBiz) Register(ctx context.Context, actorID int64, name string) (*IssuedServerSecret, error) {

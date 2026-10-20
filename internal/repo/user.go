@@ -20,11 +20,6 @@ type UserRepository struct {
 	db *gorm.DB
 }
 
-// NewUserRepository 创建使用指定数据库连接的用户仓储
-func NewUserRepository(db *gorm.DB) *UserRepository {
-	return &UserRepository{db: db}
-}
-
 // FindByID 查询当前未删除账户的公开信息，不读取密码哈希
 func (r *UserRepository) FindByID(ctx context.Context, id int64) (*model.User, error) {
 	var user model.User

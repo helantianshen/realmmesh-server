@@ -22,43 +22,14 @@ type createServerRequest struct {
 	ServerName string `json:"server_name"`
 }
 
-// serverIDRequest 使用字符串编码读取雪花 ID，避免前端浮点数精度损失
-type serverIDRequest struct {
-	ServerID int64 `json:"server_id,string"`
-}
-
-// setServerEnabledRequest 要求显式提供 enabled，缺失或 null 不代表停用
-type setServerEnabledRequest struct {
-	serverIDRequest
-	Enabled *bool `json:"enabled"`
-}
-
-// serverListRequest 复用公共分页字段，服务器查询条件在此结构中扩展
-type serverListRequest struct {
-	pagination.Request
-}
-
-// serverResponse 是管理查询的字段白名单，不包含凭证摘要
-type serverResponse struct {
-	ID         int64     `json:"id,string"`
-	ServerName string    `json:"server_name"`
-	Enabled    bool      `json:"enabled"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
-}
-
 // serverSecretResponse 仅用于创建和轮换成功后的凭证交付
 type serverSecretResponse struct {
 	ID     int64  `json:"id,string"`
 	Secret string `json:"secret"`
 }
 
-// NewServerHandler 注入共享的服务器业务对象
-func NewServerHandler(serverBiz *biz.ServerBiz) *ServerHandler {
-	return &ServerHandler{serverBiz: serverBiz}
-}
-
 // Create 创建启用的服务器记录，只有持久化成功才交付原始密钥
+// POST /api/v1/admin/servers/create
 func (h *ServerHandler) Create(ctx khttp.Context, account *biz.Account) error {
 	var request createServerRequest
 	if err := ctx.Bind(&request); err != nil {
@@ -76,7 +47,22 @@ func (h *ServerHandler) Create(ctx khttp.Context, account *biz.Account) error {
 	})
 }
 
+// serverListRequest 复用公共分页字段，服务器查询条件在此结构中扩展
+type serverListRequest struct {
+	pagination.Request
+}
+
+// serverResponse 供列表和详情接口共用，管理查询不包含凭证摘要
+type serverResponse struct {
+	ID         int64     `json:"id,string"`
+	ServerName string    `json:"server_name"`
+	Enabled    bool      `json:"enabled"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
 // List 解析公共分页参数，取得业务结果后逐项映射为安全 HTTP 响应
+// POST /api/v1/admin/servers/list
 func (h *ServerHandler) List(ctx khttp.Context, account *biz.Account) error {
 	var request serverListRequest
 	if err := ctx.Bind(&request); err != nil {
@@ -108,7 +94,13 @@ func (h *ServerHandler) List(ctx khttp.Context, account *biz.Account) error {
 	})
 }
 
+// serverIDRequest 供详情、启停、轮换和删除接口共用，以字符串读取雪花 ID
+type serverIDRequest struct {
+	ServerID int64 `json:"server_id,string"`
+}
+
 // Detail 返回指定未删除服务器的管理信息，停用服务器仍可查询
+// POST /api/v1/admin/servers/detail
 func (h *ServerHandler) Detail(ctx khttp.Context, account *biz.Account) error {
 	var request serverIDRequest
 	if err := ctx.Bind(&request); err != nil || request.ServerID <= 0 {
@@ -122,7 +114,14 @@ func (h *ServerHandler) Detail(ctx khttp.Context, account *biz.Account) error {
 	return ctx.JSON(http.StatusOK, toServerResponse(*info))
 }
 
+// setServerEnabledRequest 要求显式提供 enabled，缺失或 null 不代表停用
+type setServerEnabledRequest struct {
+	serverIDRequest
+	Enabled *bool `json:"enabled"`
+}
+
 // SetEnabled 修改管理启停状态，重复设置同一状态仍成功，不改变密钥
+// POST /api/v1/admin/servers/set-enabled
 func (h *ServerHandler) SetEnabled(ctx khttp.Context, account *biz.Account) error {
 	var request setServerEnabledRequest
 	if err := ctx.Bind(&request); err != nil {
@@ -139,6 +138,7 @@ func (h *ServerHandler) SetEnabled(ctx khttp.Context, account *biz.Account) erro
 }
 
 // RotateSecret 替换存储摘要并交付新密钥，启停状态不随轮换改变
+// POST /api/v1/admin/servers/rotate-secret
 func (h *ServerHandler) RotateSecret(ctx khttp.Context, account *biz.Account) error {
 	var request serverIDRequest
 	if err := ctx.Bind(&request); err != nil || request.ServerID <= 0 {
@@ -156,6 +156,7 @@ func (h *ServerHandler) RotateSecret(ctx khttp.Context, account *biz.Account) er
 }
 
 // Delete 软删除指定服务器，记录不存在或已经删除时返回 404
+// POST /api/v1/admin/servers/delete
 func (h *ServerHandler) Delete(ctx khttp.Context, account *biz.Account) error {
 	var request serverIDRequest
 	if err := ctx.Bind(&request); err != nil || request.ServerID <= 0 {

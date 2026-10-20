@@ -38,11 +38,6 @@ type LoginBiz struct {
 	systemConfigRepo *repo.SystemConfigRepository
 }
 
-// NewLoginBiz 组装用户仓储和中心配置仓储，所有服务器共用中心策略
-func NewLoginBiz(userRepo *repo.UserRepository, systemConfigRepo *repo.SystemConfigRepository) *LoginBiz {
-	return &LoginBiz{userRepo: userRepo, systemConfigRepo: systemConfigRepo}
-}
-
 // Authenticate 校验登录并持久化失败状态，正常拒绝通过 LoginResult 返回
 //
 // 先读取配置，再锁定账户检查休息期。未到期时直接返回 kick，不能校验密码或延长时间

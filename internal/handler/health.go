@@ -15,6 +15,7 @@ type healthResponse struct {
 }
 
 // HealthHandler 返回服务存活状态，不检查数据库或其他依赖
+// GET /healthz
 func HealthHandler(ctx khttp.Context) error {
 	return ctx.JSON(http.StatusOK, healthResponse{
 		Status: "ok",

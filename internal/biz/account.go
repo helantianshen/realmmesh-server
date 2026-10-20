@@ -24,11 +24,6 @@ type Account struct {
 	IsAdmin    bool
 }
 
-// NewAccountBiz 组装账户查询业务
-func NewAccountBiz(userRepo *repo.UserRepository) *AccountBiz {
-	return &AccountBiz{userRepo: userRepo}
-}
-
 // Current 每次读取当前未删除账户，权限变更在后续请求中生效
 func (accountBiz *AccountBiz) Current(ctx context.Context, userID int64) (*Account, error) {
 	user, err := accountBiz.userRepo.FindByID(ctx, userID)

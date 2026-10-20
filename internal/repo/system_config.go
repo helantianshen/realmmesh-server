@@ -23,11 +23,6 @@ type LoginPolicy struct {
 	Cooldown    time.Duration
 }
 
-// NewSystemConfigRepository 创建使用指定连接的系统配置仓储
-func NewSystemConfigRepository(db *gorm.DB) *SystemConfigRepository {
-	return &SystemConfigRepository{db: db}
-}
-
 // LoginPolicy 在同一次查询中读取并校验中心登录策略，不缓存配置
 func (r *SystemConfigRepository) LoginPolicy(ctx context.Context) (LoginPolicy, error) {
 	keys := []string{

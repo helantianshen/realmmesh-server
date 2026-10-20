@@ -30,11 +30,6 @@ type RegisteredUser struct {
 	PlayerName string
 }
 
-// NewRegistrationBiz 组装用户仓储和共享 ID 生成器
-func NewRegistrationBiz(userRepo *repo.UserRepository, ids *sonyflake.Sonyflake) *RegistrationBiz {
-	return &RegistrationBiz{userRepo: userRepo, ids: ids}
-}
-
 // Register 校验注册信息并创建普通账户，返回不含密码哈希的账户信息
 func (registrationBiz *RegistrationBiz) Register(ctx context.Context, playerName, plainPassword string) (*RegisteredUser, error) {
 	if !playerNamePattern.MatchString(playerName) {

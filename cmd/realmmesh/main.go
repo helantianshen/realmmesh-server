@@ -83,29 +83,18 @@ func run(configPath string) (err error) {
 		return err
 	}
 
-	// 组装共享仓储与业务对象，HTTP 和 gRPC 使用相同的账户数据源
-	userRepo := repo.NewUserRepository(db)
-	systemConfigRepo := repo.NewSystemConfigRepository(db)
-	serverRepo := repo.NewServerRepository(db)
-
-	registrationBiz := biz.NewRegistrationBiz(userRepo, generator)
-	loginBiz := biz.NewLoginBiz(userRepo, systemConfigRepo)
-	accountBiz := biz.NewAccountBiz(userRepo)
-	serverBiz := biz.NewServerBiz(userRepo, serverRepo, generator)
-
-	// 将业务依赖交给协议处理器，再注册到对应的传输服务
-	authHandler := handler.NewAuthHandler(registrationBiz, loginBiz, tokenManager)
-	serverHandler := handler.NewServerHandler(serverBiz)
-	probeHandler := &handler.ProbeGRPCHandler{}
-	httpServer := server.NewHTTPServer(cfg.Server.HTTP.Addr, authHandler, serverHandler, accountBiz, tokenManager)
-	grpcServer, err := server.NewGRPCServer(cfg.Server.GRPC, serverBiz, probeHandler)
+	// 按依赖顺序组装各层，所有入口复用同一组基础设施与业务对象
+	repositories := repo.NewRepositories(db)
+	businesses := biz.NewBusinesses(repositories, generator)
+	handlers := handler.NewHandlers(businesses, tokenManager)
+	transports, err := server.NewTransports(cfg.Server, handlers, businesses, tokenManager)
 	if err != nil {
 		return err
 	}
 
 	app := kratos.New(
 		kratos.Name("realmmesh-server"),
-		kratos.Server(httpServer, grpcServer),
+		kratos.Server(transports.HTTP, transports.GRPC),
 	)
 	return app.Run()
 }

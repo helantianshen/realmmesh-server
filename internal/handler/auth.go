@@ -27,36 +27,15 @@ type credentialsRequest struct {
 	Password   string `json:"password"`
 }
 
-// accountResponse 只暴露账户公开信息，ID 使用字符串编码以保留整数精度
+// accountResponse 供注册和当前账户接口共用，ID 使用字符串编码以保留整数精度
 type accountResponse struct {
 	ID         int64  `json:"id,string"`
 	PlayerName string `json:"player_name"`
 	IsAdmin    bool   `json:"is_admin"`
 }
 
-// loginResponse 交付访问令牌、截止时间和身份，不将管理员权限写入令牌
-type loginResponse struct {
-	AccessToken string    `json:"access_token"`
-	TokenType   string    `json:"token_type"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	UserID      int64     `json:"user_id,string"`
-	PlayerName  string    `json:"player_name"`
-}
-
-// NewAuthHandler 组装注册、登录与令牌签发依赖，不在请求中重复初始化
-func NewAuthHandler(
-	registrationBiz *biz.RegistrationBiz,
-	loginBiz *biz.LoginBiz,
-	tokenManager *token.Manager,
-) *AuthHandler {
-	return &AuthHandler{
-		registrationBiz: registrationBiz,
-		loginBiz:        loginBiz,
-		tokenManager:    tokenManager,
-	}
-}
-
 // Register 创建普通账户并返回安全信息，客户端随后通过登录接口取得令牌
+// POST /api/v1/auth/register
 func (h *AuthHandler) Register(ctx khttp.Context) error {
 	var request credentialsRequest
 
@@ -79,7 +58,17 @@ func (h *AuthHandler) Register(ctx khttp.Context) error {
 	})
 }
 
+// loginResponse 交付访问令牌、截止时间和身份，不将管理员权限写入令牌
+type loginResponse struct {
+	AccessToken string    `json:"access_token"`
+	TokenType   string    `json:"token_type"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	UserID      int64     `json:"user_id,string"`
+	PlayerName  string    `json:"player_name"`
+}
+
 // Login 复用中心失败计数与休息期，只有密码验证和状态提交成功后才签发 JWT
+// POST /api/v1/auth/login
 // 处理顺序为解析请求、执行登录、返回拒绝原因或签发令牌
 // 失败计数和休息截止时间由业务层维护，HTTP 只组织响应，不执行游戏服踢人操作
 func (h *AuthHandler) Login(ctx khttp.Context) error {
@@ -141,6 +130,8 @@ func (h *AuthHandler) Login(ctx khttp.Context) error {
 }
 
 // Me 返回认证入口查询到的当前账户，不能用请求正文指定目标用户
+// POST /api/v1/auth/me
+// POST /api/v1/admin/me
 func (h *AuthHandler) Me(ctx khttp.Context, account *biz.Account) error {
 	return ctx.JSON(http.StatusOK, accountResponse{
 		ID:         account.ID,

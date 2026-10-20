@@ -1,5 +1,5 @@
-// HTTP 传输基础设施：服务构建与路由组装
-// 注册健康、账户和服务器管理接口，配置 JSON 请求解析、请求超时与响应缓存策略
+// HTTP 传输基础设施：服务构建与请求边界
+// 配置 JSON 请求解析、请求超时与响应缓存策略
 
 // Package server 构建 HTTP 和 gRPC 服务，组装路由、认证边界与请求日志
 package server
@@ -12,9 +12,7 @@ import (
 	"time"
 
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
-	"github.com/helantianshen/realmmesh-server/internal/biz"
 	"github.com/helantianshen/realmmesh-server/internal/handler"
-	"github.com/helantianshen/realmmesh-server/pkg/token"
 )
 
 const (
@@ -22,40 +20,13 @@ const (
 	maxJSONBodyBytes   = 4096             // JSON 请求正文的最大字节数
 )
 
-// NewHTTPServer 创建 HTTP 服务，将公开接口与需要账户认证的接口分别注册
-// 账户接口统一使用 POST，只有健康检查使用 GET
-func NewHTTPServer(
-	addr string,
-	authHandler *handler.AuthHandler,
-	serverHandler *handler.ServerHandler,
-	accountBiz *biz.AccountBiz,
-	tokenManager *token.Manager,
-) *khttp.Server {
+// NewHTTPServer 创建 HTTP 传输服务，配置请求超时和 JSON 解码边界
+func NewHTTPServer(addr string) *khttp.Server {
 	srv := khttp.NewServer(
 		khttp.Address(addr),
 		khttp.Timeout(httpRequestTimeout),
 		khttp.RequestDecoder(decodeJSONRequest),
 	)
-
-	router := srv.Route("/")
-	router.GET("/healthz", handler.HealthHandler)
-
-	// 账户接口统一禁止缓存，注册和登录本身不要求已有令牌
-	api := srv.Route("/api/v1", noStore)
-	api.POST("/auth/register", authHandler.Register)
-	api.POST("/auth/login", authHandler.Login)
-
-	// 当前账户路由只需身份认证；管理员路由还要求当前管理员权限
-	api.POST("/auth/me", requireAccount(accountBiz, tokenManager, false, authHandler.Me))
-	api.POST("/admin/me", requireAccount(accountBiz, tokenManager, true, authHandler.Me))
-
-	// 所有服务器管理操作都要求当前管理员权限，包括列表和详情查询
-	api.POST("/admin/servers/create", requireAccount(accountBiz, tokenManager, true, serverHandler.Create))
-	api.POST("/admin/servers/list", requireAccount(accountBiz, tokenManager, true, serverHandler.List))
-	api.POST("/admin/servers/detail", requireAccount(accountBiz, tokenManager, true, serverHandler.Detail))
-	api.POST("/admin/servers/set-enabled", requireAccount(accountBiz, tokenManager, true, serverHandler.SetEnabled))
-	api.POST("/admin/servers/rotate-secret", requireAccount(accountBiz, tokenManager, true, serverHandler.RotateSecret))
-	api.POST("/admin/servers/delete", requireAccount(accountBiz, tokenManager, true, serverHandler.Delete))
 
 	return srv
 }

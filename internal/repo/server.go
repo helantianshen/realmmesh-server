@@ -15,9 +15,6 @@ import (
 
 type ServerRepository struct{ db *gorm.DB }
 
-// NewServerRepository 创建负责服务器记录的仓储
-func NewServerRepository(db *gorm.DB) *ServerRepository { return &ServerRepository{db: db} }
-
 // Create 写入服务器身份、启用状态和密钥摘要
 func (r *ServerRepository) Create(ctx context.Context, server *model.Server) error {
 	if err := r.db.WithContext(ctx).Create(server).Error; err != nil {

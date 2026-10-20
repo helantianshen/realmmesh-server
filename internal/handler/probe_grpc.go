@@ -16,6 +16,7 @@ type ProbeGRPCHandler struct {
 var _ probev1.ProbeServiceServer = (*ProbeGRPCHandler)(nil)
 
 // Echo 原样返回探测消息，供客户端验证 RPC 通信
+// RPC /realmmesh.probe.v1.ProbeService/Echo
 func (h *ProbeGRPCHandler) Echo(ctx context.Context, req *probev1.EchoRequest) (*probev1.EchoResponse, error) {
 	return &probev1.EchoResponse{
 		Message: req.GetMessage(),
