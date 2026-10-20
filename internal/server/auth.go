@@ -1,3 +1,6 @@
+// 游戏服身份：gRPC 认证边界
+// 校验请求凭证并传递可信身份，在流式消息收发时复查凭证状态
+
 package server
 
 import (
@@ -23,7 +26,7 @@ func AuthenticatedServer(ctx context.Context) (biz.ServerIdentity, bool) {
 
 // authenticateRPC 检查唯一 metadata 值，再委托业务层读取数据库认证
 // 数据库异常只返回通用状态，密码、摘要和驱动错误不进入协议响应
-func authenticateRPC(ctx context.Context, auth *biz.Server) (*biz.ServerIdentity, error) {
+func authenticateRPC(ctx context.Context, serverBiz *biz.ServerBiz) (*biz.ServerIdentity, error) {
 	// 1. 每个字段只能出现一次，避免不同组件对重复值作出不同解释
 	md, _ := metadata.FromIncomingContext(ctx)
 	ids, secrets := md.Get("x-realmmesh-server-id"), md.Get("authorization")
@@ -40,7 +43,7 @@ func authenticateRPC(ctx context.Context, auth *biz.Server) (*biz.ServerIdentity
 	// 2. 长连接通常没有整体截止时间，为每次数据库认证单独设置等待上限
 	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	identity, err := auth.Authenticate(checkCtx, id, strings.TrimPrefix(secrets[0], "Bearer "))
+	identity, err := serverBiz.Authenticate(checkCtx, id, strings.TrimPrefix(secrets[0], "Bearer "))
 	if errors.Is(err, biz.ErrServerCredentialInvalid) {
 		return nil, errRPCCredentialInvalid
 	}
@@ -54,9 +57,9 @@ func authenticateRPC(ctx context.Context, auth *biz.Server) (*biz.ServerIdentity
 }
 
 // serverUnaryAuth 对每个普通 RPC 读取最新凭证状态，通过后才执行处理器
-func serverUnaryAuth(auth *biz.Server) grpc.UnaryServerInterceptor {
+func serverUnaryAuth(serverBiz *biz.ServerBiz) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		identity, err := authenticateRPC(ctx, auth)
+		identity, err := authenticateRPC(ctx, serverBiz)
 		if err != nil {
 			return nil, err
 		}
@@ -66,9 +69,9 @@ func serverUnaryAuth(auth *biz.Server) grpc.UnaryServerInterceptor {
 
 // serverStreamAuth 认证建流请求并包装所有收发操作，旧流不能只靠建流时的认证结果继续使用
 // 空闲流在下一次收发时发现撤销；处理器必须响应 context 取消并返回收发错误
-func serverStreamAuth(auth *biz.Server) grpc.StreamServerInterceptor {
+func serverStreamAuth(serverBiz *biz.ServerBiz) grpc.StreamServerInterceptor {
 	return func(service any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		identity, err := authenticateRPC(stream.Context(), auth)
+		identity, err := authenticateRPC(stream.Context(), serverBiz)
 		if err != nil {
 			return err
 		}
@@ -79,7 +82,7 @@ func serverStreamAuth(auth *biz.Server) grpc.StreamServerInterceptor {
 			ServerStream: stream,
 			ctx:          ctx,
 			cancel:       cancel,
-			auth:         auth,
+			serverBiz:    serverBiz,
 		}
 		return handler(service, guarded)
 	}
@@ -87,9 +90,9 @@ func serverStreamAuth(auth *biz.Server) grpc.StreamServerInterceptor {
 
 type authenticatedStream struct {
 	grpc.ServerStream
-	ctx    context.Context
-	cancel context.CancelFunc
-	auth   *biz.Server
+	ctx       context.Context
+	cancel    context.CancelFunc
+	serverBiz *biz.ServerBiz
 }
 
 // Context 提供已验证身份和可被凭证撤销取消的请求上下文
@@ -99,7 +102,7 @@ func (s *authenticatedStream) Context() context.Context {
 
 // check 再次核验建流时的原始凭证，轮换后不会自动替换为新的密钥
 func (s *authenticatedStream) check() error {
-	_, err := authenticateRPC(s.ctx, s.auth)
+	_, err := authenticateRPC(s.ctx, s.serverBiz)
 	if err != nil {
 		s.cancel()
 	}

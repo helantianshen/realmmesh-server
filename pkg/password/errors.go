@@ -1,3 +1,6 @@
+// 密码安全基础设施：哈希操作错误契约
+// 区分编码无效、密码不匹配与随机盐生成失败
+
 package password
 
 import "errors"

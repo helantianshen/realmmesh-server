@@ -1,3 +1,6 @@
+// HTTP 身份凭证基础设施：JWT 签发与验证
+// 封装 HS256 签名、用户 ID 和过期时间，账户状态与权限由调用方另行查询
+
 // Package token 签发和校验用于 RealmMesh HTTP 访问的 JWT
 package token
 

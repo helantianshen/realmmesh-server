@@ -1,3 +1,7 @@
+// 账户：用户仓储
+// 封装账户创建与查询、实时权限读取，以及带行锁的登录状态事务
+
+// Package repo 封装账户、服务器和系统配置的数据访问及事务边界
 package repo
 
 import (
@@ -19,6 +23,20 @@ type UserRepository struct {
 // NewUserRepository 创建使用指定数据库连接的用户仓储
 func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{db: db}
+}
+
+// FindByID 查询当前未删除账户的公开信息，不读取密码哈希
+func (r *UserRepository) FindByID(ctx context.Context, id int64) (*model.User, error) {
+	var user model.User
+	err := r.db.WithContext(ctx).Select("id", "player_name", "is_admin").
+		First(&user, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, repositoryError("查询账户", err)
+	}
+	return &user, nil
 }
 
 // Create 写入用户，并将名字唯一索引冲突转换为仓储错误

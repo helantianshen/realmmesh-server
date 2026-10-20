@@ -1,3 +1,6 @@
+// 业务层错误契约：账户认证与游戏服管理
+// 集中定义可判定的业务错误，供协议层映射为对外响应
+
 package biz
 
 import "errors"
@@ -19,3 +22,8 @@ var (
 )
 
 var ErrServerNotFound = errors.New("服务器不存在或已删除")
+
+var (
+	ErrAccountUnavailable = errors.New("账户不可用")
+	ErrAccountLookup      = errors.New("账户查询失败")
+)

@@ -1,3 +1,6 @@
+// 运行配置：配置文件加载
+// 通过 Kratos 读取配置文件，完成结构映射与校验后释放监听资源
+
 package config
 
 import (

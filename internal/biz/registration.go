@@ -1,3 +1,6 @@
+// 账户：普通账户注册
+// 校验名字与密码规则，生成密码哈希及用户 ID，并协调账户持久化
+
 package biz
 
 import (
@@ -17,7 +20,7 @@ var (
 	passwordPattern   = regexp.MustCompile(`^[A-Za-z0-9$%&@#^*!]{6,12}$`)
 )
 
-type Registration struct {
+type RegistrationBiz struct {
 	userRepo *repo.UserRepository
 	ids      *sonyflake.Sonyflake
 }
@@ -27,13 +30,13 @@ type RegisteredUser struct {
 	PlayerName string
 }
 
-// NewRegistration 组装用户仓储和共享 ID 生成器
-func NewRegistration(userRepo *repo.UserRepository, ids *sonyflake.Sonyflake) *Registration {
-	return &Registration{userRepo: userRepo, ids: ids}
+// NewRegistrationBiz 组装用户仓储和共享 ID 生成器
+func NewRegistrationBiz(userRepo *repo.UserRepository, ids *sonyflake.Sonyflake) *RegistrationBiz {
+	return &RegistrationBiz{userRepo: userRepo, ids: ids}
 }
 
 // Register 校验注册信息并创建普通账户，返回不含密码哈希的账户信息
-func (r *Registration) Register(ctx context.Context, playerName, plainPassword string) (*RegisteredUser, error) {
+func (registrationBiz *RegistrationBiz) Register(ctx context.Context, playerName, plainPassword string) (*RegisteredUser, error) {
 	if !playerNamePattern.MatchString(playerName) {
 		return nil, ErrPlayerNameInvalid
 	}
@@ -51,7 +54,7 @@ func (r *Registration) Register(ctx context.Context, playerName, plainPassword s
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	id, err := r.ids.NextID()
+	id, err := registrationBiz.ids.NextID()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrRegistrationFailed, err)
 	}
@@ -61,7 +64,7 @@ func (r *Registration) Register(ctx context.Context, playerName, plainPassword s
 		PasswordHash: hash,
 		IsAdmin:      0,
 	}
-	if err := r.userRepo.Create(ctx, &user); err != nil {
+	if err := registrationBiz.userRepo.Create(ctx, &user); err != nil {
 		if errors.Is(err, repo.ErrPlayerNameConflict) {
 			return nil, ErrPlayerNameTaken
 		}

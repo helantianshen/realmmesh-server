@@ -1,3 +1,6 @@
+// HTTP 身份凭证基础设施：JWT 错误契约
+// 区分配置或身份非法、签发失败、令牌无效与过期，不包含原始令牌
+
 package token
 
 import "errors"

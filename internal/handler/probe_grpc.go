@@ -1,4 +1,7 @@
-package service
+// 运维诊断：gRPC Echo 协议适配
+// 实现生成协议中的 Echo 处理器，原样返回已进入处理器的探测消息
+
+package handler
 
 import (
 	"context"
@@ -13,10 +16,7 @@ type ProbeGRPCHandler struct {
 var _ probev1.ProbeServiceServer = (*ProbeGRPCHandler)(nil)
 
 // Echo 原样返回探测消息，供客户端验证 RPC 通信
-func (h *ProbeGRPCHandler) Echo(
-	ctx context.Context,
-	req *probev1.EchoRequest,
-) (*probev1.EchoResponse, error) {
+func (h *ProbeGRPCHandler) Echo(ctx context.Context, req *probev1.EchoRequest) (*probev1.EchoResponse, error) {
 	return &probev1.EchoResponse{
 		Message: req.GetMessage(),
 	}, nil

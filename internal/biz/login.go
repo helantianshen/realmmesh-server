@@ -1,3 +1,6 @@
+// 账户认证：密码登录与休息期策略
+// 在仓储事务内判断登录结果、更新失败次数和截止时间，并返回重试或踢人信息
+
 package biz
 
 import (
@@ -30,14 +33,14 @@ type LoginResult struct {
 	Kick              bool
 }
 
-type Login struct {
+type LoginBiz struct {
 	userRepo         *repo.UserRepository
 	systemConfigRepo *repo.SystemConfigRepository
 }
 
-// NewLogin 组装用户仓储和中心配置仓储，所有服务器共用中心策略
-func NewLogin(userRepo *repo.UserRepository, systemConfigRepo *repo.SystemConfigRepository) *Login {
-	return &Login{userRepo: userRepo, systemConfigRepo: systemConfigRepo}
+// NewLoginBiz 组装用户仓储和中心配置仓储，所有服务器共用中心策略
+func NewLoginBiz(userRepo *repo.UserRepository, systemConfigRepo *repo.SystemConfigRepository) *LoginBiz {
+	return &LoginBiz{userRepo: userRepo, systemConfigRepo: systemConfigRepo}
 }
 
 // Authenticate 校验登录并持久化失败状态，正常拒绝通过 LoginResult 返回
@@ -45,18 +48,18 @@ func NewLogin(userRepo *repo.UserRepository, systemConfigRepo *repo.SystemConfig
 // 先读取配置，再锁定账户检查休息期。未到期时直接返回 kick，不能校验密码或延长时间
 // 到期后重置状态，再验证密码；成功清零，失败达到阈值则进入新的休息期
 // 只有数据库事务提交成功后才返回结果，基础设施异常不视为密码错误
-func (l *Login) Authenticate(ctx context.Context, playerName, plainPassword string) (*LoginResult, error) {
+func (loginBiz *LoginBiz) Authenticate(ctx context.Context, playerName, plainPassword string) (*LoginResult, error) {
 	if !playerNamePattern.MatchString(playerName) {
 		return nil, ErrPlayerNameInvalid
 	}
 
-	policy, err := l.systemConfigRepo.LoginPolicy(ctx)
+	policy, err := loginBiz.systemConfigRepo.LoginPolicy(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrLoginFailed, err)
 	}
 
 	var result *LoginResult
-	err = l.userRepo.UpdateLoginState(ctx, playerName, func(user *model.User, now time.Time) (bool, error) {
+	err = loginBiz.userRepo.UpdateLoginState(ctx, playerName, func(user *model.User, now time.Time) (bool, error) {
 		// 休息判断必须在密码格式和哈希校验之前，每次请求都返回踢出结果
 		if user.CooldownUntil != nil && now.Before(*user.CooldownUntil) {
 			result = cooldownResult(user, now)

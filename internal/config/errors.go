@@ -1,3 +1,6 @@
+// 运行配置：配置校验错误
+// 集中定义配置缺失或取值非法的错误，不包含实际凭据
+
 package config
 
 import "errors"

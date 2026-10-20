@@ -1,4 +1,7 @@
-package service
+// 运行健康：HTTP 存活检查
+// 返回进程存活状态，不将数据库或其他依赖状态纳入此检查
+
+package handler
 
 import (
 	"net/http"

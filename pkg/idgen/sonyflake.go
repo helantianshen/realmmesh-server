@@ -1,3 +1,7 @@
+// 标识生成基础设施：Sonyflake 实例构造
+// 按中心节点编号和固定时间参数创建共享 ID 生成器
+
+// Package idgen 按中心节点配置创建 Sonyflake ID 生成器
 package idgen
 
 import (

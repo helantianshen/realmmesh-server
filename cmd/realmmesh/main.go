@@ -1,3 +1,7 @@
+// 应用启动：中心服务组装入口
+// 加载配置、初始化 ID 与数据库、执行迁移，并管理 HTTP 和 gRPC 服务生命周期
+
+// Realmmesh 启动 RealmMesh 中心服务，组装持久化、业务对象和协议入口
 package main
 
 import (
@@ -12,10 +16,11 @@ import (
 	"github.com/helantianshen/realmmesh-server/internal/biz"
 	"github.com/helantianshen/realmmesh-server/internal/config"
 	"github.com/helantianshen/realmmesh-server/internal/data"
+	"github.com/helantianshen/realmmesh-server/internal/handler"
 	"github.com/helantianshen/realmmesh-server/internal/repo"
 	"github.com/helantianshen/realmmesh-server/internal/server"
-	"github.com/helantianshen/realmmesh-server/internal/service"
 	"github.com/helantianshen/realmmesh-server/pkg/idgen"
+	"github.com/helantianshen/realmmesh-server/pkg/token"
 )
 
 // main 解析配置路径并在服务运行失败时退出
@@ -68,14 +73,36 @@ func run(configPath string) (err error) {
 	cancel()
 	log.Print("数据库连接、表结构迁移与系统配置初始化完成")
 
-	// 初始化 HTTP 和 gRPC 服务端
-	probeHandler := &service.ProbeGRPCHandler{}
-	httpServer := server.NewHTTPServer(cfg.Server.HTTP.Addr)
-	serverAuth := biz.NewServer(repo.NewUserRepository(db), repo.NewServerRepository(db), generator)
-	grpcServer, err := server.NewGRPCServer(cfg.Server.GRPC, serverAuth, probeHandler)
+	// 创建共享令牌管理器，所有 HTTP 登录请求使用同一份签名配置
+	lifetime, err := cfg.JWT.Lifetime()
 	if err != nil {
 		return err
 	}
+	tokenManager, err := token.New(cfg.JWT.SigningKey, lifetime)
+	if err != nil {
+		return err
+	}
+
+	// 组装共享仓储与业务对象，HTTP 和 gRPC 使用相同的账户数据源
+	userRepo := repo.NewUserRepository(db)
+	systemConfigRepo := repo.NewSystemConfigRepository(db)
+	serverRepo := repo.NewServerRepository(db)
+
+	registrationBiz := biz.NewRegistrationBiz(userRepo, generator)
+	loginBiz := biz.NewLoginBiz(userRepo, systemConfigRepo)
+	accountBiz := biz.NewAccountBiz(userRepo)
+	serverBiz := biz.NewServerBiz(userRepo, serverRepo, generator)
+
+	// 将业务依赖交给协议处理器，再注册到对应的传输服务
+	authHandler := handler.NewAuthHandler(registrationBiz, loginBiz, tokenManager)
+	serverHandler := handler.NewServerHandler(serverBiz)
+	probeHandler := &handler.ProbeGRPCHandler{}
+	httpServer := server.NewHTTPServer(cfg.Server.HTTP.Addr, authHandler, serverHandler, accountBiz, tokenManager)
+	grpcServer, err := server.NewGRPCServer(cfg.Server.GRPC, serverBiz, probeHandler)
+	if err != nil {
+		return err
+	}
+
 	app := kratos.New(
 		kratos.Name("realmmesh-server"),
 		kratos.Server(httpServer, grpcServer),

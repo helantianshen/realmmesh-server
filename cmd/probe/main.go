@@ -1,3 +1,7 @@
+// 运维诊断：gRPC 连通性探测入口
+// 读取命令参数和服务器凭证，调用 Echo 并核对响应
+
+// Probe 使用服务器凭证执行 gRPC Echo 探测，检查中心服务通信
 package main
 
 import (

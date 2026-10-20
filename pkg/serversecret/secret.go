@@ -1,3 +1,6 @@
+// 游戏服凭证基础设施：随机密钥与摘要
+// 生成可交付密钥及 SHA-256 摘要，验证原始密钥与存储摘要是否匹配
+
 // Package serversecret 生成和校验中心签发的服务器随机密钥
 package serversecret
 

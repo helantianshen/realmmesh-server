@@ -1,3 +1,7 @@
+// 密码安全基础设施：Argon2id 哈希与校验
+// 生成随机盐和带参数的哈希编码，并以相同参数重算后进行常量时间比较
+
+// Package password 提供 Argon2id 密码哈希生成及校验，不存储明文密码
 package password
 
 import (

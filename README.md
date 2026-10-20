@@ -1,6 +1,6 @@
 # RealmMesh Server
 
-Go/Kratos 中心，提供 HTTP 健康接口和 gRPC Echo，并已接入 PostgreSQL 用户表及启动自动迁移。注册登录业务层与服务器密钥认证已实现；玩家外部认证入口和资产功能尚未实现。
+Go/Kratos 中心，提供 HTTP 健康接口和 gRPC Echo，并已接入 PostgreSQL 用户表及启动自动迁移。注册登录业务层与服务器密钥认证已实现；HTTP 注册、登录和身份查询已实现，游戏服玩家 RPC 入口和资产功能尚未实现。
 
 ## 环境与固定版本
 
@@ -114,7 +114,7 @@ config/errors.go 定义配置校验错误，idgen/errors.go 定义初始化错�
 
 ## 中心注册业务
 
-internal/biz/registration.go 提供 NewRegistration 和 Register；传入 repo.NewUserRepository(db) 与共享 Sonyflake 实例。当前尚未接入 HTTP/RPC 或 Mod。调用顺序为名字/密码校验、Argon2id 哈希、雪花 ID、数据库插入。返回值只有 ID 与原始大小写名字，不返回密码哈希或提供管理员赋值入口。
+internal/biz/registration.go 提供 NewRegistrationBiz 和 Register；传入 repo.NewUserRepository(db) 与共享 Sonyflake 实例。已接入 HTTP 注册接口，玩家 RPC 与 Mod 尚未接入。调用顺序为名字/密码校验、Argon2id 哈希、雪花 ID、数据库插入。返回值只有 ID 与原始大小写名字，不返回密码哈希或提供管理员赋值入口。
 
 玩家名字限定 3–16 位 ASCII 英文字母、数字、下划线；密码限定 6–12 位英文字母、数字或 $%&@#^*!，不要求混合字符种类，不自动去空白或改大小写。唯一性由数据库 lower(player_name) 全表索引保障，已删除名字永久占用；只有该索引的 23505 错误映射为 ErrPlayerNameTaken。
 
@@ -149,7 +149,7 @@ users 新增 login_failures（非负 bigint，默认 0）和 cooldown_until（�
 
 LoginResult.Status 包含 succeeded、unregistered、wrong_password、cooling_down。正常认证拒绝使用结果返回以便提交失败计数，数据库错误、取消或损坏哈希才返回 error。返回信息不含密码哈希；同一账户哈希计算期间持有行锁，不同账户无应用级全局锁。
 
-每个请求单次读取中心配置，后续请求可看到修改；已有休息截止时间不追溯重算。配置缺失或非法时拒绝处理，不回退到本地默认值。无外部 HTTP/RPC 登录入口、玩家中心会话或令牌；Mod 实际 kick 尚未接入。
+每个请求单次读取中心配置，后续请求可看到修改；已有休息截止时间不追溯重算。配置缺失或非法时拒绝处理，不回退到本地默认值。HTTP 登录已接入并签发 JWT；玩家 RPC、中心在线会话与 Mod 实际 kick 尚未接入。
 
 中心登录已通过用户审查，临时测试文件已按要求清理。清理前已在实际 PostgreSQL 的独立 schema 中验证登录边界及跨连接并发；具体历史结果见 .agent/tasks/phase2-login.md。
 
@@ -164,7 +164,7 @@ pkg/serversecret 使用 crypto/rand 生成 32 字节密钥，Base64URL 无填充
 
 internal/model/server.go 定义 servers 表及显式 TableName，主键为雪花 ID；server_name 用于展示，允许重名，限制 1–64 个字符且禁止控制字符和首尾空白。enabled 与 deleted_at 分开。查询按主键进行，因此当前没有添加名称、密钥或启用状态索引。普通启动将 servers 纳入事务迁移。
 
-internal/biz/server.go 提供 Register、SetEnabled、RotateSecret、Delete 和 Authenticate。管理操作从 userRepo 查询当前管理员权限；操作者 ID 必须由已认证的管理入口提供，不能直接采用用户提交的 ID。当前仅业务层具备管理功能，尚未开放管理员 HTTP API。
+internal/biz/server.go 提供 Register、SetEnabled、RotateSecret、Delete 和 Authenticate。管理操作从 userRepo 查询当前管理员权限；操作者 ID 必须由已认证的管理入口提供，不能直接采用用户提交的 ID。服务器管理 HTTP API 与管理员身份查询均已接入。
 
 每次 RPC 的 metadata 携带单个 x-realmmesh-server-id 和 authorization: Bearer <原始密钥>。拦截器查询数据库当前状态，不缓存认证结果；认证成功后通过 AuthenticatedServer(ctx) 提供身份。不存在、停用和密钥错误统一返回 Unauthenticated，数据库异常返回 Unavailable，响应不暴露驱动详情。Go probe 通过 REALMMESH_SERVER_SECRET 环境变量读取密钥，PerRPCCredentials 在每次明文调用中附加凭据。
 
@@ -175,7 +175,7 @@ internal/biz/server.go 提供 Register、SetEnabled、RotateSecret、Delete 和 
 
 ## HTTP JWT 工具
 
-pkg/token 使用 github.com/golang-jwt/jwt/v5 v5.3.1，固定 HS256。New(signingKey, lifetime) 创建管理器；Issue(userID) 为已经认证成功的用户签发令牌及截止时间；Verify(encoded) 校验通过后返回用户 ID。工具不查询数据库、不验证密码或管理员权限，不提供刷新、单令牌撤销或 HTTP 接口。
+pkg/token 使用 github.com/golang-jwt/jwt/v5 v5.3.1，固定 HS256。New(signingKey, lifetime) 创建管理器；Issue(userID) 为已经认证成功的用户签发令牌及截止时间；Verify(encoded) 校验通过后返回用户 ID。工具不查询数据库、不验证密码或管理员权限，不提供刷新或单令牌撤销，HTTP 接口由 internal/handler 和 internal/server 接入。
 
 配置示例：
 
@@ -191,8 +191,57 @@ expires_in 使用 2h、30m 等时长文本，省略或空字符串时默认两�
 
 载荷只写入 user_id（字符串形式的 int64 用户 ID）和 exp（过期时间）。Claims 嵌入库的 RegisteredClaims，复用 JSON 解码和 JWT 库校验，不手工解析整数或校验用途。固定 HS256，要求 exp 存在且未过期，并检查用户 ID 为正数。时间精度为秒，到达截止时间立即失效，无额外宽限期。签名不加密载荷，不放入密码或管理员权限。
 
-接入调用顺序为 JWTConfig.Lifetime → token.New → 认证成功后 Issue；受保护接口先 Verify，再查询账户是否仍存在及当前权限。当前只实现工具和配置，尚未组装 HTTP Handler 或认证中间件，不能将工具验证通过等同账户可用或具有管理员权限。
+接入调用顺序为 JWTConfig.Lifetime → token.New → 认证成功后 Issue；受保护接口先 Verify，再查询账户是否仍存在及当前权限。启动入口已组装共享令牌管理器与 HTTP Handler，受保护路由在 JWT 校验后查询当前账户及权限。
 
 新增 HTTP 接口统一使用 POST，包括查询接口；已有 GET /healthz 保持不变。默认有效期两小时，无自动刷新；当前没有改密后立即撤销旧令牌的机制。
 
-本步已审查通过，pkg/token/jwt_test.go 与 internal/config/jwt_test.go 已按用户要求清理。清理前通过 race 测试，覆盖有效期配置、签发校验、过期边界、非法声明、算法替换、篡改、密钥变更及并发使用，详情见 .agent/tasks/phase2-jwt.md。清理后 go test ./... 仅检查包编译，不能视为这些行为仍有自动回归覆盖。
+本步已审查通过，pkg/token/jwt_test.go 与 internal/config/jwt_test.go 已按用户要求清理。清理前通过 race 测试，覆盖有效期配置、签发校验、过期边界、非法声明、算法替换、篡改、密钥变更及并发使用，详情见 .agent/tasks/phase2-jwt.md。这些 JWT 工具用例已不参与回归；HTTP 历史集成验证及清理状态见下文。
+
+## HTTP 账户接口
+
+协议适配统一位于 internal/handler；业务对象使用 XxxBiz，依赖和变量使用 xxxBiz。注册不会自动签发令牌，登录成功才返回 JWT。首位管理员通过普通注册后由部署者手动设置，注册请求不能指定权限。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | /api/v1/auth/register | JSON 输入 player_name、password；201 返回 id（字符串）、player_name、is_admin=false |
+| POST | /api/v1/auth/login | JSON 输入 player_name、password；200 返回 access_token、token_type、expires_at、user_id（字符串）、player_name |
+| POST | /api/v1/auth/me | Bearer JWT；200 返回当前 id、player_name、is_admin |
+| POST | /api/v1/admin/me | Bearer JWT 且当前为管理员；返回同上 |
+| GET | /healthz | 无需认证，保持原有健康检查 |
+
+注册和登录只接受 application/json，正文最多 4096 字节，拒绝未知字段和多个 JSON 值。身份查询不使用请求正文中的身份信息。现有 Kratos 路由对错误方法返回 404，业务不会执行。
+
+错误使用 Kratos 的 code（HTTP 状态数字）、reason（固定业务码）、message 和 metadata。参数错误 400、认证失败 401、权限不足 403、名字冲突 409、休息期 429、内部异常 500。密码错误的 metadata.remaining_attempts、休息期的 metadata.retry_after_seconds 均为十进制字符串；休息期另有 cooldown_until 和 Retry-After 响应头。HTTP 不执行游戏 kick。响应不包含密码哈希或原始数据库错误，账户接口设置 Cache-Control: no-store。
+
+受保护请求通过 Authorization: Bearer <JWT> 认证，每次查当前未删除账户和权限。测试覆盖同一令牌下账户删除和管理员降权立即影响后续请求；不提供自动刷新和单令牌撤销。HTTP 请求上下文超时为 10 秒。
+
+本步已审查通过，internal/server/http_test.go 已按用户要求清理。清理前在独立 PostgreSQL schema 中通过 HTTP 集成测试及 race 检查，结果保留在 .agent/tasks/phase2-http-auth-plan.md。清理后 go test ./... 只提供包编译检查，不代表这些行为仍有自动回归覆盖。
+
+## 服务器管理 HTTP 接口
+
+以下路径统一以 /api/v1/admin/servers 开头，全部使用 POST、application/json 和 Authorization: Bearer <JWT>。每次读取当前账户和管理员权限，业务层继续复查权限；正文不接受操作者 ID。服务器 ID 使用 JSON 字符串。
+
+| 路径 | 请求正文 | 成功响应 |
+| --- | --- | --- |
+| /create | server_name | 201，id、secret；默认启用 |
+| /list | page、page_size（可省略） | 200，items、total、page、page_size |
+| /detail | server_id | 200，公开服务器信息 |
+| /set-enabled | server_id、enabled | 204，无正文 |
+| /rotate-secret | server_id | 200，id、secret |
+| /delete | server_id | 204，无正文 |
+
+列表与详情仅返回 id、server_name、enabled、created_at、updated_at，不读取或返回密钥摘要。enabled 表示管理员设置的启停状态，不表示在线。原始密钥只在创建或轮换成功的响应交付，响应丢失时需再次轮换。停用保留密钥，重新启用后原密钥仍可用；轮换不改变启停状态。删除为软删除，重复删除或查询已删除记录返回 404。enabled 缺失或 null 返回 400，重复设置同一状态仍返回 204。
+
+公共分页位于 pkg/pagination：Request.Resolve 补齐默认值，Params.Validate 校验范围及偏移量溢出，Params.Offset 提供数据库偏移量，Result[T] 统一结果结构。服务器 Handler 通过 serverListRequest 嵌入公共请求字段，业务与仓储复用参数，不让公共组件依赖 GORM 或 HTTP 框架。
+
+分页默认第 1 页、每页 20 条，最大 100 条；省略或 null 采用默认值，显式零值、负数及非法类型返回 400。按 ID 倒序，排除软删除记录，保留停用记录；空页 items 为 []。同次请求的总数和数据页在只读 REPEATABLE READ 事务中查询，跨请求不保留快照。
+
+示例正文：
+
+```json
+{"page": 1, "page_size": 20}
+```
+
+错误沿用 Kratos 格式：参数 400、身份无效 401、权限不足 403、服务器不存在 404、内部失败 500。所有管理响应禁止缓存，凭证不进入业务日志。其他 HTTP 方法由现有路由拒绝，不执行业务。
+
+本步已审查通过，pkg/pagination/pagination_test.go 和 internal/server/server_http_test.go 已按用户要求清理。清理前分页单测、独立 PostgreSQL schema 中的真实 HTTP/gRPC 集成测试及 race 检查通过，详情见 .agent/tasks/phase2-server-http-plan.md。清理后 go test ./... 仅检查包编译，不代表仍具备对应自动回归覆盖。
