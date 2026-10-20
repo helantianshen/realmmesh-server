@@ -7,8 +7,8 @@ import (
 )
 
 const (
-	ConfigAuthMaxFailures     = "auth.max_failures"
-	ConfigAuthCooldownSeconds = "auth.cooldown_seconds"
+	ConfigAuthMaxFailures     = "auth.max_failures"     // 登录失败次数上限，达到该次数立即进入休息期
+	ConfigAuthCooldownSeconds = "auth.cooldown_seconds" // 登录休息时长，单位为秒
 )
 
 // TableName 指定中心系统配置表名

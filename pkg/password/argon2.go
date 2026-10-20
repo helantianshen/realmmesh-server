@@ -19,45 +19,106 @@ const (
 	parameters  = "m=19456,t=2,p=1"
 )
 
-// Hash 使用随机盐生成包含算法参数的 Argon2id 密码哈希
+// Hash 为明文密码生成可存入数据库的 Argon2id 编码串
+//
+// 先生成随机盐，再使用密码和盐计算哈希，最后将盐与哈希编码为文本
+// 返回值同时保存算法、版本和计算参数，校验密码时使用其中的盐重算哈希
+// 盐可以与哈希一起保存，明文密码不会包含在返回值中
 func Hash(plain string) (string, error) {
+	// 第一步：生成随机盐，让相同密码的多次哈希使用不同的随机输入
 	salt := make([]byte, saltLength)
-	// 使用密码学安全随机数填满盐，使相同密码的多次哈希使用不同输入
+	// rand.Read 使用密码学安全随机数填满 salt
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("%w: %w", ErrSaltGeneration, err)
 	}
-	// 将密码和盐交给 Argon2id，按迭代轮数、内存 KiB 数和并行度生成指定字节数的哈希
-	key := argon2.IDKey([]byte(plain), salt, iterations, memoryKiB, parallelism, keyLength)
-	// 使用不带等号填充的 Base64，将盐和哈希编码为可存储的文本
+
+	// 第二步：计算密码哈希，参数依次为密码、盐、迭代轮数、内存 KiB 数、并行度和输出字节数
+	key := argon2.IDKey(
+		[]byte(plain),
+		salt,
+		iterations,
+		memoryKiB,
+		parallelism,
+		keyLength,
+	)
+
+	// 第三步：将二进制盐和哈希转换为不带等号填充的 Base64 文本
 	encoding := base64.RawStdEncoding
-	return "$argon2id$v=19$" + parameters + "$" + encoding.EncodeToString(salt) + "$" + encoding.EncodeToString(key), nil
+	encodedSalt := encoding.EncodeToString(salt)
+	encodedKey := encoding.EncodeToString(key)
+
+	// 编码串以美元符号分隔各字段，开头的空字段使结果以美元符号起始
+	encoded := strings.Join([]string{
+		"",
+		"argon2id",
+		"v=19",
+		parameters,
+		encodedSalt,
+		encodedKey,
+	}, "$")
+
+	return encoded, nil
 }
 
-// Verify 校验支持的哈希格式并以常量时间比较密码结果
+// Verify 将待验证密码与数据库中保存的 Argon2id 编码串进行核对
+//
+// 校验不解密原密码，而是先检查编码格式，再取出原盐和预期哈希，
+// 使用待验证密码、原盐及相同参数重新计算哈希，最后比较两份哈希
+//
+// 编码格式为 $argon2id$v=19$参数$盐$哈希；开头的 $ 会产生一个空字段，
+// 因而拆分结果共有六项。只有算法、版本和参数均受支持时才执行哈希计算
+// 格式错误返回 ErrHashInvalid，密码不匹配返回 ErrMismatch，匹配返回 nil
 func Verify(plain, encoded string) error {
-	// 按美元符号分隔编码串，依次取得算法、版本、参数、盐和哈希
+	// 第一步：检查字段数量，再访问各字段，避免格式错误导致索引越界
 	parts := strings.Split(encoded, "$")
-	// 只接受当前支持的参数，避免损坏的哈希导致无界内存或计算消耗
-	if len(parts) != 6 || parts[0] != "" || parts[1] != "argon2id" || parts[2] != "v=19" || parts[3] != parameters {
+	if len(parts) != 6 {
 		return ErrHashInvalid
 	}
-	// 严格检查 Base64 尾部填充位，拒绝不符合编码规范的数据
+
+	prefix := parts[0]
+	algorithm := parts[1]
+	version := parts[2]
+	storedParameters := parts[3]
+	encodedSalt := parts[4]
+	encodedKey := parts[5]
+
+	// 第二步：确认编码标识及计算参数受支持，不接受任意内存或计算成本
+	if prefix != "" || algorithm != "argon2id" {
+		return ErrHashInvalid
+	}
+	if version != "v=19" {
+		return ErrHashInvalid
+	}
+	if storedParameters != parameters {
+		return ErrHashInvalid
+	}
+
+	// 第三步：还原盐和预期哈希；Strict 检查 Base64 尾部未使用位是否为零
 	encoding := base64.RawStdEncoding.Strict()
-	// 将存储的盐还原为字节，用于重算待验证密码的哈希
-	salt, err := encoding.DecodeString(parts[4])
+	salt, err := encoding.DecodeString(encodedSalt)
 	if err != nil || len(salt) != saltLength {
 		return ErrHashInvalid
 	}
-	// 将存储的哈希还原为字节，作为比较目标
-	expected, err := encoding.DecodeString(parts[5])
-	if err != nil || len(expected) != keyLength {
+
+	expectedKey, err := encoding.DecodeString(encodedKey)
+	if err != nil || len(expectedKey) != keyLength {
 		return ErrHashInvalid
 	}
-	// 使用原盐和相同参数计算待验证密码的哈希
-	actual := argon2.IDKey([]byte(plain), salt, iterations, memoryKiB, parallelism, keyLength)
-	// 对等长哈希执行常量时间比较，避免比较耗时暴露匹配前缀长度
-	if subtle.ConstantTimeCompare(actual, expected) != 1 {
+
+	// 第四步：使用原盐重算哈希，不能生成新盐，否则无法与保存的哈希比较
+	actualKey := argon2.IDKey(
+		[]byte(plain),
+		salt,
+		iterations,
+		memoryKiB,
+		parallelism,
+		keyLength,
+	)
+
+	// 第五步：对等长哈希执行常量时间比较，避免耗时暴露匹配前缀长度
+	if subtle.ConstantTimeCompare(actualKey, expectedKey) != 1 {
 		return ErrMismatch
 	}
+
 	return nil
 }

@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/go-kratos/kratos/v3"
+	"github.com/helantianshen/realmmesh-server/internal/biz"
 	"github.com/helantianshen/realmmesh-server/internal/config"
 	"github.com/helantianshen/realmmesh-server/internal/data"
+	"github.com/helantianshen/realmmesh-server/internal/repo"
 	"github.com/helantianshen/realmmesh-server/internal/server"
 	"github.com/helantianshen/realmmesh-server/internal/service"
 	"github.com/helantianshen/realmmesh-server/pkg/idgen"
@@ -69,7 +71,11 @@ func run(configPath string) (err error) {
 	// 初始化 HTTP 和 gRPC 服务端
 	probeHandler := &service.ProbeGRPCHandler{}
 	httpServer := server.NewHTTPServer(cfg.Server.HTTP.Addr)
-	grpcServer := server.NewGRPCServer(cfg.Server.GRPC.Addr, probeHandler)
+	serverAuth := biz.NewServer(repo.NewUserRepository(db), repo.NewServerRepository(db), generator)
+	grpcServer, err := server.NewGRPCServer(cfg.Server.GRPC, serverAuth, probeHandler)
+	if err != nil {
+		return err
+	}
 	app := kratos.New(
 		kratos.Name("realmmesh-server"),
 		kratos.Server(httpServer, grpcServer),

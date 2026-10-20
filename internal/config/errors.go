@@ -12,4 +12,6 @@ var (
 	ErrNodeIDInvalid            = errors.New("id.node_id 必须是 0–1023 的整数")
 	ErrAddressInvalid           = errors.New("地址必须是 host:port 格式")
 	ErrPortInvalid              = errors.New("端口必须是 1–65535 的整数")
+	ErrJWTSigningKeyInvalid     = errors.New("jwt.signing_key 至少需要 32 字节且不能全为空白")
+	ErrJWTExpiresInInvalid      = errors.New("jwt.expires_in 必须为正整数秒的时长，例如 2h 或 30m")
 )

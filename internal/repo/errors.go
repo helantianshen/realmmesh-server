@@ -29,3 +29,7 @@ var (
 	ErrSystemConfigMissing = errors.New("必需系统配置缺失或已删除")
 	ErrSystemConfigInvalid = errors.New("系统配置值无效")
 )
+
+var ErrUserNotFound = errors.New("账户不存在或已删除")
+
+var ErrServerNotFound = errors.New("服务器不存在或已删除")

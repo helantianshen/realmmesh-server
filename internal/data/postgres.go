@@ -51,6 +51,7 @@ func Migrate(ctx context.Context, db *gorm.DB, generator *sonyflake.Sonyflake) e
 		err := tx.AutoMigrate(
 			&model.User{},
 			&model.SystemConfig{},
+			&model.Server{},
 		)
 		if err != nil {
 			return databaseError("迁移表结构", err)

@@ -3,6 +3,9 @@ package server
 import (
 	"log/slog"
 
+	"github.com/helantianshen/realmmesh-server/internal/biz"
+	"github.com/helantianshen/realmmesh-server/internal/config"
+
 	kgrpc "github.com/go-kratos/kratos/v3/transport/grpc"
 	probev1 "github.com/helantianshen/realmmesh-server/gen/probe/v1"
 	"github.com/helantianshen/realmmesh-server/internal/service"
@@ -10,15 +13,20 @@ import (
 
 // NewGRPCServer 创建 gRPC 服务并注册接口处理器
 func NewGRPCServer(
-	addr string,
+	cfg config.GRPCConfig,
+	auth *biz.Server,
 	probeHandler *service.ProbeGRPCHandler,
-) *kgrpc.Server {
+) (*kgrpc.Server, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
 	srv := kgrpc.NewServer(
-		kgrpc.Address(addr),
-		kgrpc.UnaryInterceptor(rpcLoggingInterceptor(slog.Default())),
+		kgrpc.Address(cfg.Addr),
+		kgrpc.StreamInterceptor(serverStreamAuth(auth)),
+		kgrpc.UnaryInterceptor(rpcLoggingInterceptor(slog.Default()), serverUnaryAuth(auth)),
 	)
 
 	probev1.RegisterProbeServiceServer(srv, probeHandler)
 
-	return srv
+	return srv, nil
 }

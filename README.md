@@ -1,6 +1,6 @@
 # RealmMesh Server
 
-Go/Kratos 中心，提供 HTTP 健康接口和 gRPC Echo，并已接入 PostgreSQL 用户表及启动自动迁移。注册登录、资产、TLS 和生产认证尚未实现。
+Go/Kratos 中心，提供 HTTP 健康接口和 gRPC Echo，并已接入 PostgreSQL 用户表及启动自动迁移。注册登录业务层与服务器密钥认证已实现；玩家外部认证入口和资产功能尚未实现。
 
 ## 环境与固定版本
 
@@ -50,7 +50,8 @@ race 检查需要本机支持的 Go 平台和 C 编译器。本阶段实际验�
 ./bin/realmmesh -conf configs/config.local.yaml
 # 在另一个终端中执行
 curl --fail http://127.0.0.1:8000/healthz
-./bin/probe -addr 127.0.0.1:9000 -message 'RealmMesh probe'
+# 使用已登记的服务器 ID；密钥通过环境变量提供，避免出现在命令行参数中
+./bin/probe -addr 127.0.0.1:9000 -server-id "$REALMMESH_SERVER_ID" -message 'RealmMesh probe'
 ```
 
 configs/config.yaml 是无密钥的本地示例，仅监听回环地址。机器专用修改可以复制为 configs/config.local.yaml，再用 -conf 指定；该命名已忽略提交。不要在已跟踪的示例中填入真实密钥。
@@ -65,7 +66,7 @@ configs/config.yaml 是无密钥的本地示例，仅监听回环地址。机器
 
 跨仓库的交付状态与详细结果见相邻 realmmesh-mod 仓库的 docs/PHASE1_DELIVERY.md。
 
-第一阶段以及第二阶段前两小步的临时测试已按用户要求删除。前两步的测试不再作为自动回归用例；此前实际验证结果保留在任务记录中。注册步骤的测试见文末。
+第一阶段以及第二阶段前两小步的临时测试已按用户要求删除。前两步的测试不再作为自动回归用例；此前实际验证结果保留在任务记录中。注册、系统配置与登录的临时测试也已清理；服务器凭证测试也已在审查通过后清理；当时清理后仅保留包编译检查和历史验证记录；JWT 历史验证及测试清理说明见文末。
 
 
 ## PostgreSQL 与启动迁移
@@ -121,13 +122,7 @@ pkg/password 使用 Argon2id，内存 19456 KiB、2 轮、并行度 1、16 字�
 
 注册错误位于 biz/errors.go，仓储错误位于 repo/errors.go，密码错误位于 password/errors.go，统一通过 errors.Is 判断。注册成功后的游戏连接登录状态、登录失败计数、TLS 和服务器凭证认证不在本步范围。
 
-本步数据库测试暂保留用于审查，可运行：
-
-```bash
-REALMMESH_TEST_CONFIG="$PWD/configs/config.local.yaml" go test -race -count=1 -v ./...
-```
-
-测试使用独立 schema，验证结束删除；不设置环境变量则跳过。此前两步已清理的测试仍仅保留历史结果。
+注册数据库测试已清理。此前使用独立 schema 完成实际 PostgreSQL 验证，历史结果保留在任务记录中。
 
 仓储独立位于 internal/repo，拥有仓储错误及脱敏转换；internal/data 只负责数据库连接和迁移。移动后实际 PostgreSQL 注册测试、race、vet 和构建复验通过。
 
@@ -140,4 +135,64 @@ system_configs 由 model.SystemConfig 定义，id 使用雪花 ID，key 全表�
 
 repo.SystemConfigRepository.LoginPolicy 每次以单次查询读取中心配置，不按游戏服区分，不在 YAML 保存策略。缺失项通过下次启动补齐；已存在但非法或软删除的配置需要明确修正，启动不静默重置。模型与初始化函数均有用途注释，仓储依赖命名为 systemConfigRepo。
 
-系统配置数据库测试位于 internal/data/system_config_test.go，使用 REALMMESH_TEST_CONFIG 执行，隔离 schema 及全部记录在事务结束后回滚。当前登录业务尚未接入这些配置，失败计数及 Mod kick 待下一步。
+系统配置数据库测试已清理，历史验证使用隔离 schema，记录在事务结束后回滚。中心登录业务已接入这些配置，Mod kick 尚未实现。
+
+
+接续开发前阅读 [开发约定与用户确认规则](docs/DEVELOPMENT_CONVENTIONS.md)。
+
+
+## 中心登录业务
+
+internal/biz/login.go 的 Authenticate 读取中心策略并调用 userRepo.UpdateLoginState。仓储在事务中通过 FOR UPDATE 锁定未删除账户，获取锁后读取 PostgreSQL clock_timestamp。业务先检查休息期，再校验密码；状态通过事务提交后才返回。
+
+users 新增 login_failures（非负 bigint，默认 0）和 cooldown_until（可空 timestamptz）。默认第 3 次错误进入 300 秒休息期，期间每次登录返回 Kick=true、原截止时间和向上取整的剩余秒数，不验证密码、不修改状态。到期后的第一次错误从 1 开始；成功清零。不存在或已删除账户返回 unregistered，不创建记录。
+
+LoginResult.Status 包含 succeeded、unregistered、wrong_password、cooling_down。正常认证拒绝使用结果返回以便提交失败计数，数据库错误、取消或损坏哈希才返回 error。返回信息不含密码哈希；同一账户哈希计算期间持有行锁，不同账户无应用级全局锁。
+
+每个请求单次读取中心配置，后续请求可看到修改；已有休息截止时间不追溯重算。配置缺失或非法时拒绝处理，不回退到本地默认值。无外部 HTTP/RPC 登录入口、玩家中心会话或令牌；Mod 实际 kick 尚未接入。
+
+中心登录已通过用户审查，临时测试文件已按要求清理。清理前已在实际 PostgreSQL 的独立 schema 中验证登录边界及跨连接并发；具体历史结果见 .agent/tasks/phase2-login.md。
+
+
+## 服务器凭证与逐次认证
+
+中心 gRPC 使用明文传输，每次调用（包括 Echo、gRPC 健康检查及反射）仍要求服务器凭证；HTTP /healthz 仍可用于本机健康检查。Mod 尚未接入凭据携带，现有 Mod 请求会被拒绝认证。
+
+用户已决定移除中心 TLS，不需要证书或证书配置。server_secret 和后续玩家密码在当前 gRPC 通道中以明文传输；SHA-256 存储和逐次认证不提供传输保密、防窃听或防冒用能力。需要传输加密的部署环境应由外部加密隧道提供，不能将本实现描述为安全加密通道。
+
+pkg/serversecret 使用 crypto/rand 生成 32 字节密钥，Base64URL 无填充编码为 43 字符；数据库只保存完整密钥文本的 SHA-256 十六进制摘要。摘要不能替代原始密钥认证。创建及轮换成功才交付原始密钥；若响应丢失，只能重新轮换，不能从数据库恢复原值。
+
+internal/model/server.go 定义 servers 表及显式 TableName，主键为雪花 ID；server_name 用于展示，允许重名，限制 1–64 个字符且禁止控制字符和首尾空白。enabled 与 deleted_at 分开。查询按主键进行，因此当前没有添加名称、密钥或启用状态索引。普通启动将 servers 纳入事务迁移。
+
+internal/biz/server.go 提供 Register、SetEnabled、RotateSecret、Delete 和 Authenticate。管理操作从 userRepo 查询当前管理员权限；操作者 ID 必须由已认证的管理入口提供，不能直接采用用户提交的 ID。当前仅业务层具备管理功能，尚未开放管理员 HTTP API。
+
+每次 RPC 的 metadata 携带单个 x-realmmesh-server-id 和 authorization: Bearer <原始密钥>。拦截器查询数据库当前状态，不缓存认证结果；认证成功后通过 AuthenticatedServer(ctx) 提供身份。不存在、停用和密钥错误统一返回 Unauthenticated，数据库异常返回 Unavailable，响应不暴露驱动详情。Go probe 通过 REALMMESH_SERVER_SECRET 环境变量读取密钥，PerRPCCredentials 在每次明文调用中附加凭据。
+
+流式 RPC 在建流、每次发送前、每次接收前以及收到消息后检查当前凭证。收到消息后的复查覆盖等待期间的撤销；失败会取消包装上下文并返回错误。处理器必须传播收发错误并响应上下文取消。空闲流在下一次收发时发现失效，不提供后台即时断开；已经通过检查的在途操作不回撤。当前没有真实事件协议，流式行为由测试专用服务验证，不等同于 Mod 事件联调。
+
+本步已审查通过，pkg/serversecret/secret_test.go 和 internal/server/auth_test.go 已按用户要求清理。清理前已使用独立 PostgreSQL schema 和真实回环明文 gRPC 验证凭证生命周期及流式撤销，结果见 .agent/tasks/phase2-remove-tls.md。上述旧步骤的测试已不参与自动回归；JWT 历史验证及测试清理说明见下文。
+
+
+## HTTP JWT 工具
+
+pkg/token 使用 github.com/golang-jwt/jwt/v5 v5.3.1，固定 HS256。New(signingKey, lifetime) 创建管理器；Issue(userID) 为已经认证成功的用户签发令牌及截止时间；Verify(encoded) 校验通过后返回用户 ID。工具不查询数据库、不验证密码或管理员权限，不提供刷新、单令牌撤销或 HTTP 接口。
+
+配置示例：
+
+```yaml
+jwt:
+  signing_key: "change-me"
+  expires_in: "2h"
+```
+
+signing_key 的示例占位符故意无法通过校验。实际配置应使用独立随机密钥，至少 32 字节，不复用数据库密码或 server_secret；本机已生成随机密钥并保存在被忽略且权限为 0600 的 configs/config.local.yaml，不随启动重新生成。多实例需要使用同一个签名密钥才能互认令牌。
+
+expires_in 使用 2h、30m 等时长文本，省略或空字符串时默认两小时。只接受正整数秒，0、负值、小数秒和溢出值拒绝。JWTConfig.Validate 纳入启动配置校验；Lifetime 返回实际时长。配置在启动时读取，修改后重启；更短有效期不追溯缩短旧令牌的 exp，变更密钥则使旧密钥签发的令牌失效。
+
+载荷只写入 user_id（字符串形式的 int64 用户 ID）和 exp（过期时间）。Claims 嵌入库的 RegisteredClaims，复用 JSON 解码和 JWT 库校验，不手工解析整数或校验用途。固定 HS256，要求 exp 存在且未过期，并检查用户 ID 为正数。时间精度为秒，到达截止时间立即失效，无额外宽限期。签名不加密载荷，不放入密码或管理员权限。
+
+接入调用顺序为 JWTConfig.Lifetime → token.New → 认证成功后 Issue；受保护接口先 Verify，再查询账户是否仍存在及当前权限。当前只实现工具和配置，尚未组装 HTTP Handler 或认证中间件，不能将工具验证通过等同账户可用或具有管理员权限。
+
+新增 HTTP 接口统一使用 POST，包括查询接口；已有 GET /healthz 保持不变。默认有效期两小时，无自动刷新；当前没有改密后立即撤销旧令牌的机制。
+
+本步已审查通过，pkg/token/jwt_test.go 与 internal/config/jwt_test.go 已按用户要求清理。清理前通过 race 测试，覆盖有效期配置、签发校验、过期边界、非法声明、算法替换、篡改、密钥变更及并发使用，详情见 .agent/tasks/phase2-jwt.md。清理后 go test ./... 仅检查包编译，不能视为这些行为仍有自动回归覆盖。

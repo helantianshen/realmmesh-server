@@ -13,3 +13,7 @@ postgres:
 
 id:
   node_id: 1
+
+jwt:
+  signing_key: "change-me"
+  expires_in: "2h"
