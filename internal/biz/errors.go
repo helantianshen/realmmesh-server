@@ -27,3 +27,5 @@ var (
 	ErrAccountUnavailable = errors.New("账户不可用")
 	ErrAccountLookup      = errors.New("账户查询失败")
 )
+
+var ErrSystemConfigRead = errors.New("读取游戏服配置失败")

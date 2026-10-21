@@ -38,3 +38,5 @@ repo.NewRepositories(db)
 HTTP 方法、路径、路由组及权限绑定集中在 server/route.go；http.go 保留超时、JSON 解码和缓存策略，grpc.go 保留监听配置及认证、日志拦截器。处理器注释标明完整路由，请求响应类型靠近首个使用的处理方法，共用类型只定义一次。
 
 增加现有能力时修改对应业务文件及集中组装入口，不在 main.go 逐项构造。玩家认证由 handler/auth_grpc.go 复用注册和登录业务，经 handler.go 构造并由 server/route.go 注册。
+
+游戏服配置读取经 `handler/config_grpc.go` → `biz/system_config.go` → `repo/system_config.go`，逐次服务器认证复用统一 gRPC 拦截器。默认登录时限及启动校验在 `data/system_config.go` 完成，配置键在 `model/system_config.go` 定义。

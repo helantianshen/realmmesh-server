@@ -9,6 +9,7 @@ import (
 
 // Businesses 保存账户与服务器业务对象，供协议入口共享
 type Businesses struct {
+	SystemConfigBiz *SystemConfigBiz
 	AccountBiz      *AccountBiz
 	RegistrationBiz *RegistrationBiz
 	LoginBiz        *LoginBiz
@@ -18,6 +19,7 @@ type Businesses struct {
 // NewBusinesses 按业务依赖组装对象，不重复创建仓储或基础设施
 func NewBusinesses(repositories *repo.Repositories, ids *sonyflake.Sonyflake) *Businesses {
 	return &Businesses{
+		SystemConfigBiz: NewSystemConfigBiz(repositories.SystemConfigRepo),
 		AccountBiz:      NewAccountBiz(repositories.UserRepo),
 		RegistrationBiz: NewRegistrationBiz(repositories.UserRepo, ids),
 		LoginBiz:        NewLoginBiz(repositories.UserRepo, repositories.SystemConfigRepo),
@@ -50,4 +52,9 @@ func NewServerBiz(userRepo *repo.UserRepository, serverRepo *repo.ServerReposito
 		serverRepo: serverRepo,
 		ids:        ids,
 	}
+}
+
+// NewSystemConfigBiz 注入中心配置仓储，供游戏服读取统一配置
+func NewSystemConfigBiz(systemConfigRepo *repo.SystemConfigRepository) *SystemConfigBiz {
+	return &SystemConfigBiz{systemConfigRepo: systemConfigRepo}
 }

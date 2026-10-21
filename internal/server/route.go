@@ -7,6 +7,7 @@ import (
 	kgrpc "github.com/go-kratos/kratos/v3/transport/grpc"
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
 	authv1 "github.com/helantianshen/realmmesh-server/gen/auth/v1"
+	configv1 "github.com/helantianshen/realmmesh-server/gen/config/v1"
 	probev1 "github.com/helantianshen/realmmesh-server/gen/probe/v1"
 	"github.com/helantianshen/realmmesh-server/internal/biz"
 	"github.com/helantianshen/realmmesh-server/internal/config"
@@ -37,6 +38,7 @@ func NewTransports(
 	registerHTTPRoutes(httpServer, handlers, businesses.AccountBiz, tokenManager)
 	probev1.RegisterProbeServiceServer(grpcServer, handlers.ProbeHandler)
 	authv1.RegisterAuthServiceServer(grpcServer, handlers.AuthGRPCHandler)
+	configv1.RegisterConfigServiceServer(grpcServer, handlers.ConfigGRPCHandler)
 	return &Transports{HTTP: httpServer, GRPC: grpcServer}, nil
 }
 

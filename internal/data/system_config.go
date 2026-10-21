@@ -18,6 +18,10 @@ import (
 func InitSystemConfig(ctx context.Context, tx *gorm.DB, generator *sonyflake.Sonyflake) error {
 	defaultConfigs := []model.SystemConfig{
 		{
+			Key:   model.ConfigAuthLoginTimeoutSeconds,
+			Value: "60",
+		},
+		{
 			Key:   model.ConfigAuthMaxFailures,
 			Value: "3",
 		},
@@ -51,6 +55,9 @@ func InitSystemConfig(ctx context.Context, tx *gorm.DB, generator *sonyflake.Son
 	// 使用同一事务读取配置，确保刚插入的默认项也参与校验
 	systemConfigRepo := repo.NewSystemConfigRepository(tx)
 	if _, err := systemConfigRepo.LoginPolicy(ctx); err != nil {
+		return fmt.Errorf("%w: %w", ErrSystemConfigInitialization, err)
+	}
+	if _, err := systemConfigRepo.LoginTimeoutSeconds(ctx); err != nil {
 		return fmt.Errorf("%w: %w", ErrSystemConfigInitialization, err)
 	}
 	return nil

@@ -18,12 +18,31 @@ import (
 
 // RPC 固定错误不包含请求值、密码哈希或底层数据库详情
 var (
+	errRPCConfigUnavailable = status.Error(codes.Unavailable, "配置数据暂时不可用")
+	errRPCConfigInvalid     = status.Error(codes.Internal, "中心登录时限配置缺失或无效")
+	errRPCConfigInternal    = status.Error(codes.Internal, "读取游戏服配置失败")
 	errRPCPlayerNameInvalid = status.Error(codes.InvalidArgument, "玩家名字格式无效")
 	errRPCPasswordInvalid   = status.Error(codes.InvalidArgument, "注册密码格式无效")
 	errRPCPlayerNameTaken   = status.Error(codes.AlreadyExists, "玩家名字已被占用")
 	errRPCUnavailable       = status.Error(codes.Unavailable, "账户数据暂时不可用")
 	errRPCInternal          = status.Error(codes.Internal, "认证处理失败")
 )
+
+// rpcConfigError 区分依赖故障与配置错误，保留取消和超时语义并隐藏底层详情
+func rpcConfigError(err error) error {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return status.FromContextError(context.Canceled).Err()
+	case errors.Is(err, context.DeadlineExceeded):
+		return status.FromContextError(context.DeadlineExceeded).Err()
+	case errors.Is(err, repo.ErrSystemConfigMissing), errors.Is(err, repo.ErrSystemConfigInvalid):
+		return errRPCConfigInvalid
+	case errors.Is(err, repo.ErrRepository):
+		return errRPCConfigUnavailable
+	default:
+		return errRPCConfigInternal
+	}
+}
 
 // rpcBusinessError 保留取消和超时语义，将业务错误转换为固定 gRPC 状态
 // 仓储访问失败返回 Unavailable；配置异常、损坏哈希和未知错误返回 Internal

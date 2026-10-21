@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	ConfigAuthMaxFailures     = "auth.max_failures"     // 登录失败次数上限，达到该次数立即进入休息期
-	ConfigAuthCooldownSeconds = "auth.cooldown_seconds" // 登录休息时长，单位为秒
+	ConfigAuthLoginTimeoutSeconds = "auth.login_timeout_seconds" // 玩家登录时限，单位为秒，只影响之后进入的玩家
+	ConfigAuthMaxFailures         = "auth.max_failures"          // 登录失败次数上限，达到该次数立即进入休息期
+	ConfigAuthCooldownSeconds     = "auth.cooldown_seconds"      // 登录休息时长，单位为秒
 )
 
 // TableName 指定中心系统配置表名

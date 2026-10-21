@@ -9,19 +9,21 @@ import (
 
 // Handlers 保存 HTTP 与 gRPC 使用的协议处理器
 type Handlers struct {
-	AuthHandler     *AuthHandler
-	AuthGRPCHandler *AuthGRPCHandler
-	ServerHandler   *ServerHandler
-	ProbeHandler    *ProbeGRPCHandler
+	ConfigGRPCHandler *ConfigGRPCHandler
+	AuthHandler       *AuthHandler
+	AuthGRPCHandler   *AuthGRPCHandler
+	ServerHandler     *ServerHandler
+	ProbeHandler      *ProbeGRPCHandler
 }
 
 // NewHandlers 复用同一组业务对象，创建账户、服务器管理和探测处理器
 func NewHandlers(businesses *biz.Businesses, tokenManager *token.Manager) *Handlers {
 	return &Handlers{
-		AuthHandler:     NewAuthHandler(businesses.RegistrationBiz, businesses.LoginBiz, tokenManager),
-		AuthGRPCHandler: NewAuthGRPCHandler(businesses.RegistrationBiz, businesses.LoginBiz),
-		ServerHandler:   NewServerHandler(businesses.ServerBiz),
-		ProbeHandler:    NewProbeGRPCHandler(),
+		ConfigGRPCHandler: NewConfigGRPCHandler(businesses.SystemConfigBiz),
+		AuthHandler:       NewAuthHandler(businesses.RegistrationBiz, businesses.LoginBiz, tokenManager),
+		AuthGRPCHandler:   NewAuthGRPCHandler(businesses.RegistrationBiz, businesses.LoginBiz),
+		ServerHandler:     NewServerHandler(businesses.ServerBiz),
+		ProbeHandler:      NewProbeGRPCHandler(),
 	}
 }
 
@@ -54,4 +56,9 @@ func NewAuthHandler(
 // NewServerHandler 注入共享的服务器业务对象
 func NewServerHandler(serverBiz *biz.ServerBiz) *ServerHandler {
 	return &ServerHandler{serverBiz: serverBiz}
+}
+
+// NewConfigGRPCHandler 注入中心配置业务，复用统一服务器凭据认证
+func NewConfigGRPCHandler(systemConfigBiz *biz.SystemConfigBiz) *ConfigGRPCHandler {
+	return &ConfigGRPCHandler{systemConfigBiz: systemConfigBiz}
 }

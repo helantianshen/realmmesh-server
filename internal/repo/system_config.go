@@ -1,10 +1,11 @@
-// 系统配置：登录策略读取
-// 读取中心持久化配置并转换为有效的失败阈值和休息时长，不缓存查询结果
+// 系统配置：中心登录策略与游戏服登录时限读取
+// 读取并校验持久化配置，不缓存查询结果
 
 package repo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -78,4 +79,26 @@ func parsePositiveConfig(values map[string]string, key string) (int64, error) {
 		return 0, fmt.Errorf("%w: %s 必须是正整数", ErrSystemConfigInvalid, key)
 	}
 	return number, nil
+}
+
+// LoginTimeoutSeconds 读取全服共用的登录时限，缺失或非法配置不回退到默认值
+func (r *SystemConfigRepository) LoginTimeoutSeconds(ctx context.Context) (int32, error) {
+	var config model.SystemConfig
+	// 普通查询自动过滤软删除记录，不锁定配置行
+	err := r.db.WithContext(ctx).
+		Where("key = ?", model.ConfigAuthLoginTimeoutSeconds).
+		First(&config).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, fmt.Errorf("%w: %s", ErrSystemConfigMissing, model.ConfigAuthLoginTimeoutSeconds)
+	}
+	if err != nil {
+		return 0, repositoryError("读取玩家登录时限", err)
+	}
+
+	// 按十进制解析为有符号 32 位整数，与 RPC 字段范围一致，拒绝溢出或非正数
+	seconds, err := strconv.ParseInt(config.Value, 10, 32)
+	if err != nil || seconds <= 0 {
+		return 0, fmt.Errorf("%w: %s 必须是 int32 范围内的正整数", ErrSystemConfigInvalid, config.Key)
+	}
+	return int32(seconds), nil
 }
