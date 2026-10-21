@@ -1,4 +1,4 @@
-// 玩家认证：游戏服注册与登录的 gRPC 协议适配
+// 玩家认证：游戏服注册登录与账户变更订阅的 gRPC 协议适配
 // 复用中心账户业务，将提交后的认证结果转换为协议消息，不维护玩家在线会话
 
 package handler
@@ -8,6 +8,9 @@ import (
 
 	authv1 "github.com/helantianshen/realmmesh-server/gen/auth/v1"
 	"github.com/helantianshen/realmmesh-server/internal/biz"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -16,9 +19,57 @@ type AuthGRPCHandler struct {
 	authv1.UnimplementedAuthServiceServer
 	registrationBiz *biz.RegistrationBiz
 	loginBiz        *biz.LoginBiz
+	accountEventBiz *biz.AccountEventBiz
 }
 
 var _ authv1.AuthServiceServer = (*AuthGRPCHandler)(nil)
+
+// SubscribeAccountEvents 登记订阅后发送响应头，再逐条转发已提交的账户通知
+// RPC /realmmesh.auth.v1.AuthService/SubscribeAccountEvents
+// 凭据校验由流拦截器执行；取消、发送失败或中心停服时释放订阅，不重试和补发
+func (authGRPCHandler *AuthGRPCHandler) SubscribeAccountEvents(
+	_ *authv1.SubscribeAccountEventsRequest,
+	stream grpc.ServerStreamingServer[authv1.AccountEvent],
+) error {
+	events, unsubscribe, err := authGRPCHandler.accountEventBiz.Subscribe()
+	if err != nil {
+		return errRPCEventsUnavailable
+	}
+	defer unsubscribe()
+
+	// 显式发送空响应头，使客户端在没有账户变更时也能确认订阅已登记
+	if err := stream.SendHeader(metadata.MD{}); err != nil {
+		return err
+	}
+	ctx := stream.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return status.FromContextError(ctx.Err()).Err()
+		case event, open := <-events:
+			if !open {
+				return errRPCEventsUnavailable
+			}
+			if err := ctx.Err(); err != nil {
+				return status.FromContextError(err).Err()
+			}
+
+			// 业务类型在此转换为协议枚举，业务层不依赖生成代码
+			var reason authv1.AccountEventReason
+			switch event.Reason {
+			case biz.AccountPasswordChanged:
+				reason = authv1.AccountEventReason_ACCOUNT_EVENT_REASON_PASSWORD_CHANGED
+			case biz.AccountDeleted:
+				reason = authv1.AccountEventReason_ACCOUNT_EVENT_REASON_ACCOUNT_DELETED
+			default:
+				return errRPCInternal
+			}
+			if err := stream.Send(&authv1.AccountEvent{PlayerName: event.PlayerName, Reason: reason}); err != nil {
+				return err
+			}
+		}
+	}
+}
 
 // Register 创建普通账户，只有业务持久化成功才向游戏服返回身份
 // RPC /realmmesh.auth.v1.AuthService/Register

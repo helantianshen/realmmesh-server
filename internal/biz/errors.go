@@ -29,3 +29,8 @@ var (
 )
 
 var ErrSystemConfigRead = errors.New("读取游戏服配置失败")
+
+var (
+	ErrAccountEventsClosed = errors.New("账户通知通道已关闭")
+	ErrAccountEventInvalid = errors.New("账户通知原因无效")
+)

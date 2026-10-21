@@ -81,6 +81,7 @@ func run(configPath string) (err error) {
 	// 按依赖顺序组装各层，所有入口复用同一组基础设施与业务对象
 	repositories := repo.NewRepositories(db)
 	businesses := biz.NewBusinesses(repositories, generator)
+	defer businesses.AccountEventBiz.Close()
 	handlers := handler.NewHandlers(businesses, tokenManager)
 	transports, err := server.NewTransports(cfg.Server, handlers, businesses, tokenManager)
 	if err != nil {
@@ -89,6 +90,12 @@ func run(configPath string) (err error) {
 
 	app := kratos.New(
 		kratos.Name("realmmesh-server"),
+		// 先唤醒空闲订阅，再等待传输服务退出；慢连接最多等待五秒
+		kratos.BeforeStop(func(context.Context) error {
+			businesses.AccountEventBiz.Close()
+			return nil
+		}),
+		kratos.StopTimeout(5*time.Second),
 		kratos.Server(transports.HTTP, transports.GRPC),
 	)
 	return app.Run()

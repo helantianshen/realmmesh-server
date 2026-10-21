@@ -18,6 +18,7 @@ import (
 
 // RPC 固定错误不包含请求值、密码哈希或底层数据库详情
 var (
+	errRPCEventsUnavailable = status.Error(codes.Unavailable, "账户通知通道已关闭")
 	errRPCConfigUnavailable = status.Error(codes.Unavailable, "配置数据暂时不可用")
 	errRPCConfigInvalid     = status.Error(codes.Internal, "中心登录时限配置缺失或无效")
 	errRPCConfigInternal    = status.Error(codes.Internal, "读取游戏服配置失败")

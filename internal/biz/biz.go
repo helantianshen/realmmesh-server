@@ -9,6 +9,7 @@ import (
 
 // Businesses 保存账户与服务器业务对象，供协议入口共享
 type Businesses struct {
+	AccountEventBiz *AccountEventBiz
 	SystemConfigBiz *SystemConfigBiz
 	AccountBiz      *AccountBiz
 	RegistrationBiz *RegistrationBiz
@@ -19,12 +20,18 @@ type Businesses struct {
 // NewBusinesses 按业务依赖组装对象，不重复创建仓储或基础设施
 func NewBusinesses(repositories *repo.Repositories, ids *sonyflake.Sonyflake) *Businesses {
 	return &Businesses{
+		AccountEventBiz: NewAccountEventBiz(),
 		SystemConfigBiz: NewSystemConfigBiz(repositories.SystemConfigRepo),
 		AccountBiz:      NewAccountBiz(repositories.UserRepo),
 		RegistrationBiz: NewRegistrationBiz(repositories.UserRepo, ids),
 		LoginBiz:        NewLoginBiz(repositories.UserRepo, repositories.SystemConfigRepo),
 		ServerBiz:       NewServerBiz(repositories.UserRepo, repositories.ServerRepo, ids),
 	}
+}
+
+// NewAccountEventBiz 创建进程内账户通知通道，供业务发布和协议订阅共享
+func NewAccountEventBiz() *AccountEventBiz {
+	return &AccountEventBiz{subscribers: make(map[chan AccountEvent]struct{})}
 }
 
 // NewAccountBiz 组装账户查询业务

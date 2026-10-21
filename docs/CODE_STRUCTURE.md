@@ -40,3 +40,9 @@ HTTP 方法、路径、路由组及权限绑定集中在 server/route.go；http.
 增加现有能力时修改对应业务文件及集中组装入口，不在 main.go 逐项构造。玩家认证由 handler/auth_grpc.go 复用注册和登录业务，经 handler.go 构造并由 server/route.go 注册。
 
 游戏服配置读取经 `handler/config_grpc.go` → `biz/system_config.go` → `repo/system_config.go`，逐次服务器认证复用统一 gRPC 拦截器。默认登录时限及启动校验在 `data/system_config.go` 完成，配置键在 `model/system_config.go` 定义。
+
+账户变更订阅由 `handler/auth_grpc.go` 的 `SubscribeAccountEvents` 接入，登记后发送响应头，再转发 `biz/account_event.go` 的通知。业务层用 `AccountEventBiz.Publish` 发布，调用位置必须在账户事务提交成功之后；当前尚未接入改密或删除入口。
+
+通知仅覆盖当前中心进程的订阅者，每条订阅最多缓存 32 条待发送消息，满时丢弃该订阅的新消息并记录数量告警，不补发。广播不执行网络发送，网络收发仍由每条 gRPC 流独立处理并复查凭据。该机制不提供多个中心实例之间的广播。
+
+中心停服先关闭账户通知通道，使空闲订阅退出，再停止传输服务；传输退出等待上限为五秒。测试用例、生成消息编译及 Mod 构建不代表游戏服已经接入订阅。

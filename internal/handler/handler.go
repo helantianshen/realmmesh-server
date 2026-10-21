@@ -21,17 +21,22 @@ func NewHandlers(businesses *biz.Businesses, tokenManager *token.Manager) *Handl
 	return &Handlers{
 		ConfigGRPCHandler: NewConfigGRPCHandler(businesses.SystemConfigBiz),
 		AuthHandler:       NewAuthHandler(businesses.RegistrationBiz, businesses.LoginBiz, tokenManager),
-		AuthGRPCHandler:   NewAuthGRPCHandler(businesses.RegistrationBiz, businesses.LoginBiz),
+		AuthGRPCHandler:   NewAuthGRPCHandler(businesses.RegistrationBiz, businesses.LoginBiz, businesses.AccountEventBiz),
 		ServerHandler:     NewServerHandler(businesses.ServerBiz),
 		ProbeHandler:      NewProbeGRPCHandler(),
 	}
 }
 
-// NewAuthGRPCHandler 注入共享注册和登录业务，游戏认证不依赖令牌管理器
-func NewAuthGRPCHandler(registrationBiz *biz.RegistrationBiz, loginBiz *biz.LoginBiz) *AuthGRPCHandler {
+// NewAuthGRPCHandler 注入共享认证业务和账户通知通道，不依赖 HTTP 令牌管理器
+func NewAuthGRPCHandler(
+	registrationBiz *biz.RegistrationBiz,
+	loginBiz *biz.LoginBiz,
+	accountEventBiz *biz.AccountEventBiz,
+) *AuthGRPCHandler {
 	return &AuthGRPCHandler{
 		registrationBiz: registrationBiz,
 		loginBiz:        loginBiz,
+		accountEventBiz: accountEventBiz,
 	}
 }
 
