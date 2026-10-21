@@ -1,5 +1,5 @@
 // 账户：用户仓储
-// 封装账户创建与查询、实时权限读取，以及带行锁的登录状态事务
+// 封装账户创建与查询、实时权限读取，以及带行锁的密码及认证状态事务
 
 // Package repo 封装账户、服务器和系统配置的数据访问及事务边界
 package repo
@@ -20,6 +20,30 @@ type UserRepository struct {
 	db *gorm.DB
 }
 
+// DeleteRegular 软删除未删除的普通账户，并返回已删除账户的名字供提交后广播
+// 条件更新在等待并发登录或改密的行锁后重新判断管理员标记，不允许删除管理员
+func (r *UserRepository) DeleteRegular(ctx context.Context, id int64) (string, error) {
+	var user model.User
+	// RETURNING 只读取本次实际删除的名字，不先查询后删除，也不读取密码哈希
+	result := r.db.WithContext(ctx).Clauses(clause.Returning{Columns: []clause.Column{{Name: "player_name"}}}).
+		Where("id = ? AND is_admin = 0", id).Delete(&user)
+	if result.Error != nil {
+		return "", repositoryError("删除账户", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		// 未发生删除时再区分管理员保护与目标不存在，不向调用方返回密码字段
+		current, err := r.FindByID(ctx, id)
+		if err != nil {
+			return "", err
+		}
+		if current.IsAdmin == 1 {
+			return "", ErrAdminDeletionForbidden
+		}
+		return "", ErrUserNotFound
+	}
+	return user.PlayerName, nil
+}
+
 // FindByID 查询当前未删除账户的公开信息，不读取密码哈希
 func (r *UserRepository) FindByID(ctx context.Context, id int64) (*model.User, error) {
 	var user model.User
@@ -32,6 +56,25 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*model.User, e
 		return nil, repositoryError("查询账户", err)
 	}
 	return &user, nil
+}
+
+// AuthenticationSnapshot 读取不加锁的账户快照与数据库时刻，供事务外密码计算使用
+// 返回值只供业务内部校验，最终写入前必须重新读取账户并比较密码哈希
+func (r *UserRepository) AuthenticationSnapshot(ctx context.Context, playerName string) (*model.User, time.Time, error) {
+	var snapshot struct {
+		model.User
+		ObservedAt time.Time
+	}
+	err := r.db.WithContext(ctx).Model(&model.User{}).
+		Select("users.*, clock_timestamp() AS observed_at").
+		Where("lower(player_name) = ?", strings.ToLower(playerName)).Take(&snapshot).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, time.Time{}, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, time.Time{}, repositoryError("读取认证快照", err)
+	}
+	return &snapshot.User, snapshot.ObservedAt, nil
 }
 
 // Create 写入用户，并将名字唯一索引冲突转换为仓储错误
@@ -47,12 +90,12 @@ func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
 	return repositoryError("创建用户", err)
 }
 
-// UpdateLoginState 锁定用户后执行业务判断，并在同一事务中提交登录状态
+// UpdateAuthenticationState 锁定用户后执行业务判断，并在同一事务中提交密码及认证状态
 //
 // apply 返回是否需要保存状态及处理错误。密码错误和休息期属于正常结果，
 // apply 应返回 nil 错误，以免已增加的失败次数随事务回滚
-// 这里只允许保存登录计数和截止时间，不写回密码、权限或其他账户字段
-func (r *UserRepository) UpdateLoginState(
+// 只保存失败计数、截止时间和确实变化的密码哈希，不写回权限或其他账户字段
+func (r *UserRepository) UpdateAuthenticationState(
 	ctx context.Context,
 	playerName string,
 	apply func(user *model.User, now time.Time) (bool, error),
@@ -63,7 +106,7 @@ func (r *UserRepository) UpdateLoginState(
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var user model.User
 
-		// FOR UPDATE 将同一账户的登录请求串行化，普通查询自动排除软删除账户
+		// FOR UPDATE 仅串行化同账户的最终状态复核与写入，普通查询排除软删除账户
 		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("lower(player_name) = ?", strings.ToLower(playerName)).
 			First(&user).Error
@@ -80,6 +123,7 @@ func (r *UserRepository) UpdateLoginState(
 			return err
 		}
 
+		originalHash := user.PasswordHash
 		changed, err := apply(&user, now)
 		if err != nil {
 			businessError = err
@@ -90,10 +134,14 @@ func (r *UserRepository) UpdateLoginState(
 		}
 
 		// 使用 map 明确写入零值和 NULL，确保成功登录能清零并解除已到期状态
-		return tx.Model(&user).Updates(map[string]any{
+		updates := map[string]any{
 			"login_failures": user.LoginFailures,
 			"cooldown_until": user.CooldownUntil,
-		}).Error
+		}
+		if user.PasswordHash != originalHash {
+			updates["password_hash"] = user.PasswordHash
+		}
+		return tx.Model(&user).Updates(updates).Error
 	})
 
 	if err == nil {
@@ -105,5 +153,5 @@ func (r *UserRepository) UpdateLoginState(
 	if businessError != nil {
 		return businessError
 	}
-	return repositoryError("更新登录状态", err)
+	return repositoryError("更新账户认证状态", err)
 }

@@ -18,15 +18,16 @@ import (
 
 // RPC 固定错误不包含请求值、密码哈希或底层数据库详情
 var (
-	errRPCEventsUnavailable = status.Error(codes.Unavailable, "账户通知通道已关闭")
-	errRPCConfigUnavailable = status.Error(codes.Unavailable, "配置数据暂时不可用")
-	errRPCConfigInvalid     = status.Error(codes.Internal, "中心登录时限配置缺失或无效")
-	errRPCConfigInternal    = status.Error(codes.Internal, "读取游戏服配置失败")
-	errRPCPlayerNameInvalid = status.Error(codes.InvalidArgument, "玩家名字格式无效")
-	errRPCPasswordInvalid   = status.Error(codes.InvalidArgument, "注册密码格式无效")
-	errRPCPlayerNameTaken   = status.Error(codes.AlreadyExists, "玩家名字已被占用")
-	errRPCUnavailable       = status.Error(codes.Unavailable, "账户数据暂时不可用")
-	errRPCInternal          = status.Error(codes.Internal, "认证处理失败")
+	errRPCEventsUnavailable      = status.Error(codes.Unavailable, "账户通知通道已关闭")
+	errRPCConfigUnavailable      = status.Error(codes.Unavailable, "配置数据暂时不可用")
+	errRPCConfigInvalid          = status.Error(codes.Internal, "中心登录时限配置缺失或无效")
+	errRPCConfigInternal         = status.Error(codes.Internal, "读取游戏服配置失败")
+	errRPCPlayerNameInvalid      = status.Error(codes.InvalidArgument, "玩家名字格式无效")
+	errRPCPasswordInvalid        = status.Error(codes.InvalidArgument, "密码格式无效")
+	errRPCPlayerNameTaken        = status.Error(codes.AlreadyExists, "玩家名字已被占用")
+	errRPCUnavailable            = status.Error(codes.Unavailable, "账户数据暂时不可用")
+	errRPCAuthenticationConflict = status.Error(codes.Aborted, "账户状态已变化，请重新尝试")
+	errRPCInternal               = status.Error(codes.Internal, "认证处理失败")
 )
 
 // rpcConfigError 区分依赖故障与配置错误，保留取消和超时语义并隐藏底层详情
@@ -53,6 +54,8 @@ func rpcBusinessError(err error) error {
 		return status.FromContextError(context.Canceled).Err()
 	case errors.Is(err, context.DeadlineExceeded):
 		return status.FromContextError(context.DeadlineExceeded).Err()
+	case errors.Is(err, biz.ErrAuthenticationConflict):
+		return errRPCAuthenticationConflict
 	case errors.Is(err, biz.ErrPlayerNameInvalid):
 		return errRPCPlayerNameInvalid
 	case errors.Is(err, biz.ErrPasswordInvalid):
@@ -81,6 +84,8 @@ var (
 // 已知业务错误提供明确提示；未知错误统一返回服务不可用，不使用原始 err.Error()
 func BusinessError(err error) error {
 	switch {
+	case errors.Is(err, biz.ErrAuthenticationConflict):
+		return kerrors.Conflict("AUTHENTICATION_CONFLICT", biz.ErrAuthenticationConflict.Error())
 	case errors.Is(err, biz.ErrPlayerNameInvalid):
 		return kerrors.BadRequest("PLAYER_NAME_INVALID", biz.ErrPlayerNameInvalid.Error())
 	case errors.Is(err, biz.ErrPasswordInvalid):
@@ -88,6 +93,10 @@ func BusinessError(err error) error {
 	case errors.Is(err, biz.ErrPlayerNameTaken):
 		return kerrors.Conflict("PLAYER_NAME_TAKEN", biz.ErrPlayerNameTaken.Error())
 
+	case errors.Is(err, biz.ErrAccountNotFound):
+		return kerrors.NotFound("ACCOUNT_NOT_FOUND", biz.ErrAccountNotFound.Error())
+	case errors.Is(err, biz.ErrAdminDeletionForbidden):
+		return kerrors.Forbidden("ADMIN_DELETION_FORBIDDEN", biz.ErrAdminDeletionForbidden.Error())
 	case errors.Is(err, biz.ErrAccountUnavailable):
 		return ErrUnauthorized
 	case errors.Is(err, biz.ErrAdminRequired):

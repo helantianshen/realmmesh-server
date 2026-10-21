@@ -1,4 +1,4 @@
-// 玩家认证：游戏服注册登录与账户变更订阅的 gRPC 协议适配
+// 玩家认证：游戏服注册、登录、改密与账户变更订阅的 gRPC 协议适配
 // 复用中心账户业务，将提交后的认证结果转换为协议消息，不维护玩家在线会话
 
 package handler
@@ -20,6 +20,7 @@ type AuthGRPCHandler struct {
 	registrationBiz *biz.RegistrationBiz
 	loginBiz        *biz.LoginBiz
 	accountEventBiz *biz.AccountEventBiz
+	accountBiz      *biz.AccountBiz
 }
 
 var _ authv1.AuthServiceServer = (*AuthGRPCHandler)(nil)
@@ -140,5 +141,38 @@ func loginRPCResponse(result *biz.LoginResult) (*authv1.LoginResponse, error) {
 		return nil, errRPCInternal
 	}
 
+	return response, nil
+}
+
+// ChangePassword 将共享密码校验结果转换为改密响应，不授予玩家登录状态
+// RPC /realmmesh.auth.v1.AuthService/ChangePassword
+func (authGRPCHandler *AuthGRPCHandler) ChangePassword(ctx context.Context, request *authv1.ChangePasswordRequest) (*authv1.ChangePasswordResponse, error) {
+	result, err := authGRPCHandler.accountBiz.ChangePassword(ctx, request.GetPlayerName(), request.GetOldPassword(), request.GetNewPassword())
+	if err != nil {
+		return nil, rpcBusinessError(err)
+	}
+
+	response := &authv1.ChangePasswordResponse{
+		RemainingAttempts: result.RemainingAttempts,
+		RetryAfterSeconds: result.RetryAfterSeconds,
+		Kick:              result.Kick,
+	}
+	switch result.Status {
+	case biz.LoginSucceeded:
+		response.Status = authv1.ChangePasswordStatus_CHANGE_PASSWORD_STATUS_SUCCEEDED
+	case biz.LoginUnregistered:
+		response.Status = authv1.ChangePasswordStatus_CHANGE_PASSWORD_STATUS_UNREGISTERED
+	case biz.LoginWrongPassword:
+		response.Status = authv1.ChangePasswordStatus_CHANGE_PASSWORD_STATUS_WRONG_PASSWORD
+	case biz.LoginCoolingDown:
+		response.Status = authv1.ChangePasswordStatus_CHANGE_PASSWORD_STATUS_COOLING_DOWN
+		// 数据库截止时间转换为标准 Timestamp，非休息结果不设置该字段
+		response.CooldownUntil = timestamppb.New(*result.CooldownUntil)
+		if err := response.CooldownUntil.CheckValid(); err != nil {
+			return nil, errRPCInternal
+		}
+	default:
+		return nil, errRPCInternal
+	}
 	return response, nil
 }

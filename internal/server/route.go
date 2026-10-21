@@ -64,6 +64,8 @@ func registerHTTPRoutes(
 	api.POST("/auth/me", requireAccount(accountBiz, tokenManager, false, authHandler.Me))
 	api.POST("/admin/me", requireAccount(accountBiz, tokenManager, true, authHandler.Me))
 
+	api.POST("/admin/users/delete", requireToken(tokenManager, handlers.AccountHandler.Delete))
+
 	// 服务器管理入口验证 JWT，业务层统一查库检查账户及管理员权限
 	api.POST("/admin/servers/create", requireToken(tokenManager, serverHandler.Create))
 	api.POST("/admin/servers/list", requireToken(tokenManager, serverHandler.List))

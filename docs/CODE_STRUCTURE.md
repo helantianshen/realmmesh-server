@@ -35,13 +35,17 @@ repo.NewRepositories(db)
 
 普通请求从 server 的路由与认证入口进入 handler，再调用 biz 和 repo。model 描述数据映射，data 负责启动基础设施，不作为请求处理的额外业务层。
 
+数据库连接关闭 GORM 默认写事务包装，普通单条写入使用 PostgreSQL 自动提交；当前没有关联写入或模型写入钩子。多步原子操作仅在启动迁移与账户密码/失败状态更新中显式使用事务。后续增加关联写入或多条写入时，需按实际一致性要求决定事务边界。
+
 HTTP 方法、路径、路由组及权限绑定集中在 server/route.go；http.go 保留超时、JSON 解码和缓存策略，grpc.go 保留监听配置及认证、日志拦截器。处理器注释标明完整路由，请求响应类型靠近首个使用的处理方法，共用类型只定义一次。
 
 增加现有能力时修改对应业务文件及集中组装入口，不在 main.go 逐项构造。玩家认证由 handler/auth_grpc.go 复用注册和登录业务，经 handler.go 构造并由 server/route.go 注册。
 
 游戏服配置读取经 `handler/config_grpc.go` → `biz/system_config.go` → `repo/system_config.go`，逐次服务器认证复用统一 gRPC 拦截器。默认登录时限及启动校验在 `data/system_config.go` 完成，配置键在 `model/system_config.go` 定义。
 
-账户变更订阅由 `handler/auth_grpc.go` 的 `SubscribeAccountEvents` 接入，登记后发送响应头，再转发 `biz/account_event.go` 的通知。业务层用 `AccountEventBiz.Publish` 发布，调用位置必须在账户事务提交成功之后；当前尚未接入改密或删除入口。
+账户变更订阅由 `handler/auth_grpc.go` 的 `SubscribeAccountEvents` 接入，登记后发送响应头，再转发 `biz/account_event.go` 的通知。`AccountBiz` 在改密或删除提交成功后调用 `AccountEventBiz.Publish`，通知失败不改变已提交结果。
+
+自助改密由 `handler/auth_grpc.go` → `biz/account.go` 发起，复用 `biz/login.go` 的密码校验事务流程；`repo/user.go` 的 `UpdateAuthenticationState` 在短事务内复核最新密码哈希及休息状态，并串行提交同账户的密码和失败次数；Argon2id 验证和新哈希生成在事务外完成。管理员删除由 `handler/account.go` → `biz/account.go` → `repo/user.go`，先检查操作者当前权限，再以 `is_admin = 0` 条件软删除目标。两个入口均不创建中心玩家会话。
 
 通知仅覆盖当前中心进程的订阅者，每条订阅最多缓存 32 条待发送消息，满时丢弃该订阅的新消息并记录数量告警，不补发。广播不执行网络发送，网络收发仍由每条 gRPC 流独立处理并复查凭据。该机制不提供多个中心实例之间的广播。
 

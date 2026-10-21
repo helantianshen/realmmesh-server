@@ -18,6 +18,22 @@
 
 受保护请求通过 Authorization: Bearer <JWT> 认证，每次查当前未删除账户和权限。账户删除和管理员降权影响后续请求；不提供自动刷新和单令牌撤销。HTTP 请求上下文超时为 10 秒。
 
+登录密码计算期间账户密码发生变化时，返回 409 `AUTHENTICATION_CONFLICT`，本次不计失败次数、不签发令牌。客户端不得自动重试，由用户重新提交登录。
+
+## 管理员删除账户
+
+`POST /api/v1/admin/users/delete` 使用 `application/json` 和 `Authorization: Bearer <JWT>`，请求示例：
+
+```json
+{"user_id": "123456789012345678"}
+```
+
+`user_id` 必须是正整数的十进制字符串。中心每次查库确认操作者仍是管理员；Minecraft OP 不作为权限依据。禁止删除任何管理员账户，包括自己。
+
+成功返回 204，无正文。账户软删除后名字仍永久占用，后续登录、改密和受保护账户接口拒绝该账户。重复删除返回 404，不重复通知。提交成功后广播 `ACCOUNT_DELETED`，通知失败不回滚删除，不提供恢复、离线补发或管理员重置密码接口。
+
+参数错误返回 400；令牌或操作者账户无效返回 401；非管理员返回 403 `ADMIN_REQUIRED`；目标为管理员返回 403 `ADMIN_DELETION_FORBIDDEN`；目标不存在或已删除返回 404 `ACCOUNT_NOT_FOUND`；内部失败返回 500。身份认证先于参数解析，业务权限检查在参数解析之后。响应禁止缓存，错误不包含数据库详情。
+
 ## 服务器管理 HTTP 接口
 
 以下路径统一以 /api/v1/admin/servers 开头，全部使用 POST、application/json 和 Authorization: Bearer <JWT>。入口验证 JWT，业务层每次查询当前账户并检查管理员权限，不重复查库；正文不接受操作者 ID。服务器 ID 使用 JSON 字符串。

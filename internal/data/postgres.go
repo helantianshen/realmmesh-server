@@ -29,6 +29,8 @@ func OpenPostgres(ctx context.Context, cfg config.PostgresConfig) (*gorm.DB, err
 	db, err := gorm.Open(postgres.Open(postgresDSN(cfg)), &gorm.Config{
 		Logger:               logger.Default.LogMode(logger.Silent),
 		DisableAutomaticPing: true,
+		// 单条写入使用数据库自动提交，多步原子操作由调用方显式开启事务
+		SkipDefaultTransaction: true,
 	})
 	if err != nil {
 		return nil, databaseError("初始化数据库", err)

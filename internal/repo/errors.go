@@ -35,4 +35,6 @@ var (
 
 var ErrUserNotFound = errors.New("账户不存在或已删除")
 
+var ErrAdminDeletionForbidden = errors.New("禁止删除管理员账户")
+
 var ErrServerNotFound = errors.New("服务器不存在或已删除")

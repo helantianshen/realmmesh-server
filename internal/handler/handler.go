@@ -9,6 +9,7 @@ import (
 
 // Handlers 保存 HTTP 与 gRPC 使用的协议处理器
 type Handlers struct {
+	AccountHandler    *AccountHandler
 	ConfigGRPCHandler *ConfigGRPCHandler
 	AuthHandler       *AuthHandler
 	AuthGRPCHandler   *AuthGRPCHandler
@@ -19,9 +20,10 @@ type Handlers struct {
 // NewHandlers 复用同一组业务对象，创建账户、服务器管理和探测处理器
 func NewHandlers(businesses *biz.Businesses, tokenManager *token.Manager) *Handlers {
 	return &Handlers{
+		AccountHandler:    NewAccountHandler(businesses.AccountBiz),
 		ConfigGRPCHandler: NewConfigGRPCHandler(businesses.SystemConfigBiz),
 		AuthHandler:       NewAuthHandler(businesses.RegistrationBiz, businesses.LoginBiz, tokenManager),
-		AuthGRPCHandler:   NewAuthGRPCHandler(businesses.RegistrationBiz, businesses.LoginBiz, businesses.AccountEventBiz),
+		AuthGRPCHandler:   NewAuthGRPCHandler(businesses.RegistrationBiz, businesses.LoginBiz, businesses.AccountEventBiz, businesses.AccountBiz),
 		ServerHandler:     NewServerHandler(businesses.ServerBiz),
 		ProbeHandler:      NewProbeGRPCHandler(),
 	}
@@ -32,11 +34,13 @@ func NewAuthGRPCHandler(
 	registrationBiz *biz.RegistrationBiz,
 	loginBiz *biz.LoginBiz,
 	accountEventBiz *biz.AccountEventBiz,
+	accountBiz *biz.AccountBiz,
 ) *AuthGRPCHandler {
 	return &AuthGRPCHandler{
 		registrationBiz: registrationBiz,
 		loginBiz:        loginBiz,
 		accountEventBiz: accountEventBiz,
+		accountBiz:      accountBiz,
 	}
 }
 
@@ -66,4 +70,9 @@ func NewServerHandler(serverBiz *biz.ServerBiz) *ServerHandler {
 // NewConfigGRPCHandler 注入中心配置业务，复用统一服务器凭据认证
 func NewConfigGRPCHandler(systemConfigBiz *biz.SystemConfigBiz) *ConfigGRPCHandler {
 	return &ConfigGRPCHandler{systemConfigBiz: systemConfigBiz}
+}
+
+// NewAccountHandler 注入账户业务，供管理员删除入口使用
+func NewAccountHandler(accountBiz *biz.AccountBiz) *AccountHandler {
+	return &AccountHandler{accountBiz: accountBiz}
 }

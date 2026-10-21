@@ -19,12 +19,14 @@ type Businesses struct {
 
 // NewBusinesses 按业务依赖组装对象，不重复创建仓储或基础设施
 func NewBusinesses(repositories *repo.Repositories, ids *sonyflake.Sonyflake) *Businesses {
+	accountEventBiz := NewAccountEventBiz()
+	loginBiz := NewLoginBiz(repositories.UserRepo, repositories.SystemConfigRepo)
 	return &Businesses{
-		AccountEventBiz: NewAccountEventBiz(),
+		AccountEventBiz: accountEventBiz,
 		SystemConfigBiz: NewSystemConfigBiz(repositories.SystemConfigRepo),
-		AccountBiz:      NewAccountBiz(repositories.UserRepo),
+		AccountBiz:      NewAccountBiz(repositories.UserRepo, loginBiz, accountEventBiz),
 		RegistrationBiz: NewRegistrationBiz(repositories.UserRepo, ids),
-		LoginBiz:        NewLoginBiz(repositories.UserRepo, repositories.SystemConfigRepo),
+		LoginBiz:        loginBiz,
 		ServerBiz:       NewServerBiz(repositories.UserRepo, repositories.ServerRepo, ids),
 	}
 }
@@ -34,9 +36,9 @@ func NewAccountEventBiz() *AccountEventBiz {
 	return &AccountEventBiz{subscribers: make(map[chan AccountEvent]struct{})}
 }
 
-// NewAccountBiz 组装账户查询业务
-func NewAccountBiz(userRepo *repo.UserRepository) *AccountBiz {
-	return &AccountBiz{userRepo: userRepo}
+// NewAccountBiz 组装账户查询、密码验证与提交后通知依赖
+func NewAccountBiz(userRepo *repo.UserRepository, loginBiz *LoginBiz, accountEventBiz *AccountEventBiz) *AccountBiz {
+	return &AccountBiz{userRepo: userRepo, loginBiz: loginBiz, accountEventBiz: accountEventBiz}
 }
 
 // NewRegistrationBiz 组装用户仓储和共享 ID 生成器

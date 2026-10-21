@@ -1,11 +1,12 @@
 # 玩家认证 RPC
 
-中心使用固定协议引用中的 [AuthService 契约](../proto/auth/v1/README.md)，提供两个 Unary RPC：
+中心使用固定协议引用中的 [AuthService 契约](../proto/auth/v1/README.md)，提供以下 Unary RPC：
 
 | 方法 | 用途 |
 | --- | --- |
 | /realmmesh.auth.v1.AuthService/Register | 创建普通账户，成功后返回用户 ID 与账户名字 |
 | /realmmesh.auth.v1.AuthService/Login | 校验密码并返回成功、未注册、密码错误或休息期结果 |
+| /realmmesh.auth.v1.AuthService/ChangePassword | 验证旧密码，提交新密码及共享失败状态，成功后广播变更 |
 
 调用方通过 metadata 提交单个 `x-realmmesh-server-id` 和 `authorization: Bearer <server_secret>`。中心在每次请求进入业务前读取当前服务器状态；无效凭据不能创建账户或改变登录失败计数。当前传输为明文 gRPC。
 
@@ -17,12 +18,28 @@
 
 不要自动重放注册或登录请求：超时可能发生在事务已提交之后，重试登录可能再次计数。Mod 命令、实际 kick 和旧连接响应隔离需要由游戏侧实现，中心返回标记不等于已经执行游戏操作。
 
+## 自助改密
+
+请求包含当前连接的 `player_name`、`old_password` 和 `new_password`，字段及结果约束见 [改密契约](../proto/auth/v1/CHANGE_PASSWORD.md)。中心不维护玩家在线会话；可信游戏服负责仅允许已登录连接发起，并在入口确认两次新密码一致。
+
+旧密码错误和登录共用计数、阈值和休息期。休息判断先于新旧密码校验，期间任何改密请求均返回原截止时间与踢出标记。非休息账户的新密码格式错误返回 InvalidArgument，不验证旧密码、不改变失败次数；成功改密与清零在同一事务提交。并发改密不能使用已失效的旧密码覆盖新密码。
+
+改密成功、账户不存在及休息期均要求清除本次连接认证并退出，旧密码错误未达到阈值时允许继续尝试。成功响应和 `PASSWORD_CHANGED` 通知无先后保证，不得自动重试，也不能让迟到结果影响重连后的玩家。改密不自动撤销已有 HTTP JWT。
+
+通知通过 `SubscribeAccountEvents` 服务端流发送，仅覆盖当前中心进程的在线订阅者。改密或删除提交失败不广播，广播失败不回滚已经提交的变更，不补发。Mod 改密命令尚未接入。
+
 ## 开发验证
 
-协议生成命令仍为 `bash scripts/generate-proto.sh`，同时生成 probe 与 auth，输出到 `gen/`。
+协议生成命令仍为 `bash scripts/generate-proto.sh`，同时生成 probe、auth 与 config，输出到 `gen/`。
 
 ```bash
 go test -race ./...
 ```
 
 命令只执行仓库当前保留的测试。玩家认证专项测试已清理，不构成持续回归覆盖；中心编译和测试通过也不代表 Java 或游戏实机联调通过。
+
+账户变更与短事务专项测试已在审查通过后清理；上述测试命令仅执行当前仍保留的用例，不再包含 PostgreSQL 账户变更集成覆盖。
+
+## 并发密码变化
+
+登录和改密在事务外验证密码、生成新哈希；短事务仅锁定账户，复核最新休息期与密码哈希，并提交计数和密码。期间密码发生变化时返回 `Aborted`，不计数、不写入、不广播，客户端不能自动重试，需由玩家重新发起。期间账户被删除或进入休息期时，分别返回未注册或休息结果。

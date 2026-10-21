@@ -15,6 +15,13 @@ var (
 var ErrLoginFailed = errors.New("登录处理失败")
 
 var (
+	ErrPasswordChangeFailed   = errors.New("改密处理失败")
+	ErrAccountDeleteFailed    = errors.New("删除账户失败")
+	ErrAccountNotFound        = errors.New("账户不存在或已删除")
+	ErrAdminDeletionForbidden = errors.New("禁止删除管理员账户")
+)
+
+var (
 	ErrAdminRequired           = errors.New("需要管理员权限")
 	ErrServerNameInvalid       = errors.New("服务器名称必须为 1–64 个字符且不含控制字符或首尾空白")
 	ErrServerCredentialInvalid = errors.New("服务器凭证无效或已停用")
@@ -34,3 +41,6 @@ var (
 	ErrAccountEventsClosed = errors.New("账户通知通道已关闭")
 	ErrAccountEventInvalid = errors.New("账户通知原因无效")
 )
+
+// ErrAuthenticationConflict 表示计算期间密码已变化，调用方不得自动重试
+var ErrAuthenticationConflict = errors.New("账户状态已变化，请重新尝试")
