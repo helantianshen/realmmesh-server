@@ -113,3 +113,21 @@ func BusinessError(err error) error {
 		return ErrInternal
 	}
 }
+
+var (
+	errRPCAuditInvalid         = status.Error(codes.InvalidArgument, "玩家连接审计参数无效")
+	errRPCAuditInternal        = status.Error(codes.Internal, "玩家连接审计写入失败")
+	errRPCAuditUnauthenticated = status.Error(codes.Unauthenticated, "缺少已认证服务器身份")
+)
+
+// rpcAuditError 保留调用取消和期限状态，其他错误只返回固定安全摘要
+func rpcAuditError(err error) error {
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return status.FromContextError(err).Err()
+	case errors.Is(err, biz.ErrPlayerNameInvalid), errors.Is(err, biz.ErrPlayerConnectionEventInvalid):
+		return errRPCAuditInvalid
+	default:
+		return errRPCAuditInternal
+	}
+}

@@ -9,6 +9,7 @@ import (
 
 // Handlers 保存 HTTP 与 gRPC 使用的协议处理器
 type Handlers struct {
+	AuditGRPCHandler  *AuditGRPCHandler
 	AccountHandler    *AccountHandler
 	ConfigGRPCHandler *ConfigGRPCHandler
 	AuthHandler       *AuthHandler
@@ -20,6 +21,7 @@ type Handlers struct {
 // NewHandlers 复用同一组业务对象，创建账户、服务器管理和探测处理器
 func NewHandlers(businesses *biz.Businesses, tokenManager *token.Manager) *Handlers {
 	return &Handlers{
+		AuditGRPCHandler:  NewAuditGRPCHandler(businesses.PlayerConnectionEventBiz),
 		AccountHandler:    NewAccountHandler(businesses.AccountBiz),
 		ConfigGRPCHandler: NewConfigGRPCHandler(businesses.SystemConfigBiz),
 		AuthHandler:       NewAuthHandler(businesses.RegistrationBiz, businesses.LoginBiz, tokenManager),
@@ -75,4 +77,9 @@ func NewConfigGRPCHandler(systemConfigBiz *biz.SystemConfigBiz) *ConfigGRPCHandl
 // NewAccountHandler 注入账户业务，供管理员删除入口使用
 func NewAccountHandler(accountBiz *biz.AccountBiz) *AccountHandler {
 	return &AccountHandler{accountBiz: accountBiz}
+}
+
+// NewAuditGRPCHandler 注入玩家连接审计业务，复用统一服务器认证
+func NewAuditGRPCHandler(playerConnectionEventBiz *biz.PlayerConnectionEventBiz) *AuditGRPCHandler {
+	return &AuditGRPCHandler{playerConnectionEventBiz: playerConnectionEventBiz}
 }

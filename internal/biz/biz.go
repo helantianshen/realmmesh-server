@@ -9,12 +9,13 @@ import (
 
 // Businesses 保存账户与服务器业务对象，供协议入口共享
 type Businesses struct {
-	AccountEventBiz *AccountEventBiz
-	SystemConfigBiz *SystemConfigBiz
-	AccountBiz      *AccountBiz
-	RegistrationBiz *RegistrationBiz
-	LoginBiz        *LoginBiz
-	ServerBiz       *ServerBiz
+	PlayerConnectionEventBiz *PlayerConnectionEventBiz
+	AccountEventBiz          *AccountEventBiz
+	SystemConfigBiz          *SystemConfigBiz
+	AccountBiz               *AccountBiz
+	RegistrationBiz          *RegistrationBiz
+	LoginBiz                 *LoginBiz
+	ServerBiz                *ServerBiz
 }
 
 // NewBusinesses 按业务依赖组装对象，不重复创建仓储或基础设施
@@ -22,12 +23,13 @@ func NewBusinesses(repositories *repo.Repositories, ids *sonyflake.Sonyflake) *B
 	accountEventBiz := NewAccountEventBiz()
 	loginBiz := NewLoginBiz(repositories.UserRepo, repositories.SystemConfigRepo)
 	return &Businesses{
-		AccountEventBiz: accountEventBiz,
-		SystemConfigBiz: NewSystemConfigBiz(repositories.SystemConfigRepo),
-		AccountBiz:      NewAccountBiz(repositories.UserRepo, loginBiz, accountEventBiz),
-		RegistrationBiz: NewRegistrationBiz(repositories.UserRepo, ids),
-		LoginBiz:        loginBiz,
-		ServerBiz:       NewServerBiz(repositories.UserRepo, repositories.ServerRepo, ids),
+		PlayerConnectionEventBiz: NewPlayerConnectionEventBiz(repositories.PlayerConnectionEventRepo, ids),
+		AccountEventBiz:          accountEventBiz,
+		SystemConfigBiz:          NewSystemConfigBiz(repositories.SystemConfigRepo),
+		AccountBiz:               NewAccountBiz(repositories.UserRepo, loginBiz, accountEventBiz),
+		RegistrationBiz:          NewRegistrationBiz(repositories.UserRepo, ids),
+		LoginBiz:                 loginBiz,
+		ServerBiz:                NewServerBiz(repositories.UserRepo, repositories.ServerRepo, ids),
 	}
 }
 
@@ -66,4 +68,9 @@ func NewServerBiz(userRepo *repo.UserRepository, serverRepo *repo.ServerReposito
 // NewSystemConfigBiz 注入中心配置仓储，供游戏服读取统一配置
 func NewSystemConfigBiz(systemConfigRepo *repo.SystemConfigRepository) *SystemConfigBiz {
 	return &SystemConfigBiz{systemConfigRepo: systemConfigRepo}
+}
+
+// NewPlayerConnectionEventBiz 注入审计仓储与共享 ID 生成器
+func NewPlayerConnectionEventBiz(playerConnectionEventRepo *repo.PlayerConnectionEventRepository, ids *sonyflake.Sonyflake) *PlayerConnectionEventBiz {
+	return &PlayerConnectionEventBiz{playerConnectionEventRepo: playerConnectionEventRepo, ids: ids}
 }

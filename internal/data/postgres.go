@@ -58,6 +58,7 @@ func Migrate(ctx context.Context, db *gorm.DB, generator *sonyflake.Sonyflake) e
 			&model.User{},
 			&model.SystemConfig{},
 			&model.Server{},
+			&model.PlayerConnectionEvent{},
 		)
 		if err != nil {
 			return databaseError("迁移表结构", err)

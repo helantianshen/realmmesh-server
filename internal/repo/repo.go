@@ -6,17 +6,19 @@ import "gorm.io/gorm"
 
 // Repositories 保存中心服务共用的仓储对象
 type Repositories struct {
-	UserRepo         *UserRepository
-	SystemConfigRepo *SystemConfigRepository
-	ServerRepo       *ServerRepository
+	PlayerConnectionEventRepo *PlayerConnectionEventRepository
+	UserRepo                  *UserRepository
+	SystemConfigRepo          *SystemConfigRepository
+	ServerRepo                *ServerRepository
 }
 
 // NewRepositories 使用同一连接池创建各实体仓储
 func NewRepositories(db *gorm.DB) *Repositories {
 	return &Repositories{
-		UserRepo:         NewUserRepository(db),
-		SystemConfigRepo: NewSystemConfigRepository(db),
-		ServerRepo:       NewServerRepository(db),
+		PlayerConnectionEventRepo: NewPlayerConnectionEventRepository(db),
+		UserRepo:                  NewUserRepository(db),
+		SystemConfigRepo:          NewSystemConfigRepository(db),
+		ServerRepo:                NewServerRepository(db),
 	}
 }
 
@@ -33,4 +35,9 @@ func NewSystemConfigRepository(db *gorm.DB) *SystemConfigRepository {
 // NewServerRepository 创建负责服务器记录的仓储
 func NewServerRepository(db *gorm.DB) *ServerRepository {
 	return &ServerRepository{db: db}
+}
+
+// NewPlayerConnectionEventRepository 组装共享连接池的玩家连接审计仓储
+func NewPlayerConnectionEventRepository(db *gorm.DB) *PlayerConnectionEventRepository {
+	return &PlayerConnectionEventRepository{db: db}
 }

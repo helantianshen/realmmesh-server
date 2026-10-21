@@ -9,6 +9,7 @@ Go/Kratos 中心服务，提供账户注册、登录、JWT 身份查询、管理
 - [构建、部署与配置](docs/DEPLOYMENT.md)
 - [HTTP API](docs/HTTP_API.md)
 - [玩家认证 RPC](docs/PLAYER_AUTH_RPC.md)
+- [玩家连接审计](docs/PLAYER_CONNECTION_AUDIT.md)
 - [代码结构](docs/CODE_STRUCTURE.md)
 
 ## 快速开始

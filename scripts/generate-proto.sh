@@ -17,7 +17,7 @@ check_version() {
     fi
 }
 
-if [[ ! -f proto/probe/v1/probe.proto || ! -f proto/auth/v1/auth.proto || ! -f proto/config/v1/config.proto ]]; then
+if [[ ! -f proto/probe/v1/probe.proto || ! -f proto/auth/v1/auth.proto || ! -f proto/config/v1/config.proto || ! -f proto/audit/v1/audit.proto ]]; then
     printf '缺少协议文件，请先执行 git submodule update --init --recursive\n' >&2
     exit 1
 fi
@@ -38,4 +38,5 @@ protoc \
     --go-grpc_opt=paths=source_relative \
     proto/probe/v1/probe.proto \
     proto/auth/v1/auth.proto \
-    proto/config/v1/config.proto
+    proto/config/v1/config.proto \
+    proto/audit/v1/audit.proto

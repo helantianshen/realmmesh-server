@@ -16,14 +16,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type serverIdentityKey struct{}
-
-// AuthenticatedServer 读取拦截器写入的服务器身份，处理器不能采用请求正文中的身份声明
-func AuthenticatedServer(ctx context.Context) (biz.ServerIdentity, bool) {
-	identity, ok := ctx.Value(serverIdentityKey{}).(biz.ServerIdentity)
-	return identity, ok
-}
-
 // authenticateRPC 检查唯一 metadata 值，再委托业务层读取数据库认证
 // 数据库异常只返回通用状态，密码、摘要和驱动错误不进入协议响应
 func authenticateRPC(ctx context.Context, serverBiz *biz.ServerBiz) (*biz.ServerIdentity, error) {
@@ -63,7 +55,7 @@ func serverUnaryAuth(serverBiz *biz.ServerBiz) grpc.UnaryServerInterceptor {
 		if err != nil {
 			return nil, err
 		}
-		return handler(context.WithValue(ctx, serverIdentityKey{}, *identity), request)
+		return handler(biz.WithAuthenticatedServer(ctx, *identity), request)
 	}
 }
 
@@ -76,7 +68,7 @@ func serverStreamAuth(serverBiz *biz.ServerBiz) grpc.StreamServerInterceptor {
 			return err
 		}
 
-		ctx, cancel := context.WithCancel(context.WithValue(stream.Context(), serverIdentityKey{}, *identity))
+		ctx, cancel := context.WithCancel(biz.WithAuthenticatedServer(stream.Context(), *identity))
 		defer cancel()
 		guarded := &authenticatedStream{
 			ServerStream: stream,

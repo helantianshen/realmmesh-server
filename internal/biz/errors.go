@@ -44,3 +44,8 @@ var (
 
 // ErrAuthenticationConflict 表示计算期间密码已变化，调用方不得自动重试
 var ErrAuthenticationConflict = errors.New("账户状态已变化，请重新尝试")
+
+var (
+	ErrPlayerConnectionEventInvalid = errors.New("玩家连接审计参数无效")
+	ErrPlayerConnectionEventWrite   = errors.New("玩家连接审计写入失败")
+)

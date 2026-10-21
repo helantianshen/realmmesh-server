@@ -197,3 +197,16 @@ func serverInfo(record *model.Server) ServerInfo {
 		UpdatedAt:  record.UpdatedAt,
 	}
 }
+
+type serverIdentityKey struct{}
+
+// AuthenticatedServer 读取拦截器写入的服务器身份，处理器不能采用请求正文中的身份声明
+func AuthenticatedServer(ctx context.Context) (ServerIdentity, bool) {
+	identity, ok := ctx.Value(serverIdentityKey{}).(ServerIdentity)
+	return identity, ok
+}
+
+// WithAuthenticatedServer 由传输层认证成功后写入可信身份，不接受请求正文中的服务器 ID
+func WithAuthenticatedServer(ctx context.Context, identity ServerIdentity) context.Context {
+	return context.WithValue(ctx, serverIdentityKey{}, identity)
+}
