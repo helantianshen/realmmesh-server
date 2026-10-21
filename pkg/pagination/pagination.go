@@ -19,7 +19,7 @@ type Request struct {
 	PageSize *int `json:"page_size"`
 }
 
-// Params 保存已经解析的分页值，传入仓储前仍可通过 Validate 检查范围
+// Params 保存补齐默认值后的分页参数，业务层通过 Validate 后交给仓储
 type Params struct {
 	Page     int
 	PageSize int
@@ -33,8 +33,8 @@ type Result[T any] struct {
 	PageSize int   `json:"page_size"`
 }
 
-// Resolve 补齐默认值并校验参数，不自动修正调用者提供的非法值
-func (request Request) Resolve() (Params, error) {
+// Resolve 只补齐省略的默认值，保留显式输入供业务层校验
+func (request Request) Resolve() Params {
 	params := Params{
 		Page:     DefaultPage,
 		PageSize: DefaultPageSize,
@@ -46,7 +46,7 @@ func (request Request) Resolve() (Params, error) {
 		params.PageSize = *request.PageSize
 	}
 
-	return params, params.Validate()
+	return params
 }
 
 // Validate 检查页码、单页上限及偏移量溢出，避免整数溢出绕过数据库分页

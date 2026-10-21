@@ -125,11 +125,14 @@ func (serverBiz *ServerBiz) Authenticate(ctx context.Context, serverID int64, pl
 
 // requireAdmin 从数据库读取当前权限，已删除或已降权账户不能继续管理服务器
 func (serverBiz *ServerBiz) requireAdmin(ctx context.Context, actorID int64) error {
-	allowed, err := serverBiz.userRepo.IsAdmin(ctx, actorID)
+	account, err := serverBiz.userRepo.FindByID(ctx, actorID)
+	if errors.Is(err, repo.ErrUserNotFound) {
+		return ErrAccountUnavailable
+	}
 	if err != nil {
 		return serverOperationError(err)
 	}
-	if !allowed {
+	if account.IsAdmin != 1 {
 		return ErrAdminRequired
 	}
 	return nil

@@ -107,16 +107,3 @@ func (r *UserRepository) UpdateLoginState(
 	}
 	return repositoryError("更新登录状态", err)
 }
-
-// IsAdmin 查询当前未删除账户的管理员权限，不采用调用方传入的权限标记
-func (r *UserRepository) IsAdmin(ctx context.Context, id int64) (bool, error) {
-	var user model.User
-	err := r.db.WithContext(ctx).Select("id", "is_admin").First(&user, "id = ?", id).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return false, nil
-	}
-	if err != nil {
-		return false, repositoryError("查询管理员权限", err)
-	}
-	return user.IsAdmin == 1, nil
-}

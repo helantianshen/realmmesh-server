@@ -2,12 +2,13 @@
 
 Go/Kratos 中心服务，提供账户注册、登录、JWT 身份查询、管理员服务器管理，以及带服务器凭据认证的 gRPC Echo。使用 PostgreSQL + GORM 持久化，启动时执行迁移和默认系统配置初始化。
 
-玩家认证 RPC、游戏内注册登录和资产功能尚未实现。
+中心已提供玩家注册与登录 RPC；Mod 的游戏内注册登录、实际踢人和资产功能尚未接入。
 
 ## 使用文档
 
 - [构建、部署与配置](docs/DEPLOYMENT.md)
 - [HTTP API](docs/HTTP_API.md)
+- [玩家认证 RPC](docs/PLAYER_AUTH_RPC.md)
 - [代码结构](docs/CODE_STRUCTURE.md)
 
 ## 快速开始

@@ -1,5 +1,5 @@
 // 账户认证：HTTP 访问控制边界
-// 验证 Bearer JWT 并读取当前账户，对管理路由检查实时管理员权限
+// 验证 Bearer JWT，账户信息接口读取当前账户，管理业务自行执行实时授权
 
 package server
 
@@ -12,14 +12,10 @@ import (
 	"github.com/helantianshen/realmmesh-server/pkg/token"
 )
 
-// requireAccount 为受保护路由验证 JWT，再读取当前账户与权限
-// 已验证账户通过参数传给 Handler，不接受请求正文中的用户 ID 或权限声明
-// adminOnly 为 true 时要求当前账户是管理员；任何检查失败都不会调用 next
-func requireAccount(
-	accountBiz *biz.AccountBiz,
+// requireToken 验证 JWT 并传递签名中的身份，账户可用性和权限由后续业务检查
+func requireToken(
 	tokenManager *token.Manager,
-	adminOnly bool,
-	next func(khttp.Context, *biz.Account) error,
+	next func(khttp.Context, int64) error,
 ) khttp.HandlerFunc {
 	return func(ctx khttp.Context) error {
 		// 1. 只接受一个认证头，避免重复值造成身份解释不一致
@@ -44,17 +40,25 @@ func requireAccount(
 			return handler.ErrUnauthorized
 		}
 
-		// 3. 每次查库取得当前账户与权限，JWT 本身不能证明账户仍然可用
+		return next(ctx, userID)
+	}
+}
+
+// requireAccount 为账户信息接口读取当前账户，管理员信息接口额外检查权限
+func requireAccount(
+	accountBiz *biz.AccountBiz,
+	tokenManager *token.Manager,
+	adminOnly bool,
+	next func(khttp.Context, *biz.Account) error,
+) khttp.HandlerFunc {
+	return requireToken(tokenManager, func(ctx khttp.Context, userID int64) error {
 		account, err := accountBiz.Current(ctx, userID)
 		if err != nil {
 			return handler.BusinessError(err)
 		}
-
-		// 4. 管理路由额外检查权限，然后把可信账户交给处理器
 		if adminOnly && !account.IsAdmin {
 			return handler.ErrForbidden
 		}
-
 		return next(ctx, account)
-	}
+	})
 }

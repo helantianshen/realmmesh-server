@@ -30,14 +30,14 @@ type serverSecretResponse struct {
 
 // Create 创建启用的服务器记录，只有持久化成功才交付原始密钥
 // POST /api/v1/admin/servers/create
-func (h *ServerHandler) Create(ctx khttp.Context, account *biz.Account) error {
+func (h *ServerHandler) Create(ctx khttp.Context, actorID int64) error {
 	var request createServerRequest
 	if err := ctx.Bind(&request); err != nil {
 		return ErrInvalidRequest
 	}
 
 	// 认证结果决定操作者，正文不能声明管理员身份
-	issued, err := h.serverBiz.Register(ctx, account.ID, request.ServerName)
+	issued, err := h.serverBiz.Register(ctx, actorID, request.ServerName)
 	if err != nil {
 		return BusinessError(err)
 	}
@@ -63,20 +63,17 @@ type serverResponse struct {
 
 // List 解析公共分页参数，取得业务结果后逐项映射为安全 HTTP 响应
 // POST /api/v1/admin/servers/list
-func (h *ServerHandler) List(ctx khttp.Context, account *biz.Account) error {
+func (h *ServerHandler) List(ctx khttp.Context, actorID int64) error {
 	var request serverListRequest
 	if err := ctx.Bind(&request); err != nil {
 		return ErrInvalidRequest
 	}
 
-	// Resolve 补齐默认分页值，并拒绝显式零值、负数、超限和偏移量溢出
-	params, err := request.Resolve()
-	if err != nil {
-		return BusinessError(err)
-	}
+	// Resolve 只补齐默认值，参数范围由业务层统一校验
+	params := request.Resolve()
 
 	// 业务层复查管理员权限，仓储按固定顺序查询当前页
-	page, err := h.serverBiz.List(ctx, account.ID, params)
+	page, err := h.serverBiz.List(ctx, actorID, params)
 	if err != nil {
 		return BusinessError(err)
 	}
@@ -101,13 +98,13 @@ type serverIDRequest struct {
 
 // Detail 返回指定未删除服务器的管理信息，停用服务器仍可查询
 // POST /api/v1/admin/servers/detail
-func (h *ServerHandler) Detail(ctx khttp.Context, account *biz.Account) error {
+func (h *ServerHandler) Detail(ctx khttp.Context, actorID int64) error {
 	var request serverIDRequest
 	if err := ctx.Bind(&request); err != nil || request.ServerID <= 0 {
 		return ErrInvalidRequest
 	}
 
-	info, err := h.serverBiz.Detail(ctx, account.ID, request.ServerID)
+	info, err := h.serverBiz.Detail(ctx, actorID, request.ServerID)
 	if err != nil {
 		return BusinessError(err)
 	}
@@ -122,7 +119,7 @@ type setServerEnabledRequest struct {
 
 // SetEnabled 修改管理启停状态，重复设置同一状态仍成功，不改变密钥
 // POST /api/v1/admin/servers/set-enabled
-func (h *ServerHandler) SetEnabled(ctx khttp.Context, account *biz.Account) error {
+func (h *ServerHandler) SetEnabled(ctx khttp.Context, actorID int64) error {
 	var request setServerEnabledRequest
 	if err := ctx.Bind(&request); err != nil {
 		return ErrInvalidRequest
@@ -131,7 +128,7 @@ func (h *ServerHandler) SetEnabled(ctx khttp.Context, account *biz.Account) erro
 		return ErrInvalidRequest
 	}
 
-	if err := h.serverBiz.SetEnabled(ctx, account.ID, request.ServerID, *request.Enabled); err != nil {
+	if err := h.serverBiz.SetEnabled(ctx, actorID, request.ServerID, *request.Enabled); err != nil {
 		return BusinessError(err)
 	}
 	return ctx.Blob(http.StatusNoContent, "", nil)
@@ -139,13 +136,13 @@ func (h *ServerHandler) SetEnabled(ctx khttp.Context, account *biz.Account) erro
 
 // RotateSecret 替换存储摘要并交付新密钥，启停状态不随轮换改变
 // POST /api/v1/admin/servers/rotate-secret
-func (h *ServerHandler) RotateSecret(ctx khttp.Context, account *biz.Account) error {
+func (h *ServerHandler) RotateSecret(ctx khttp.Context, actorID int64) error {
 	var request serverIDRequest
 	if err := ctx.Bind(&request); err != nil || request.ServerID <= 0 {
 		return ErrInvalidRequest
 	}
 
-	issued, err := h.serverBiz.RotateSecret(ctx, account.ID, request.ServerID)
+	issued, err := h.serverBiz.RotateSecret(ctx, actorID, request.ServerID)
 	if err != nil {
 		return BusinessError(err)
 	}
@@ -157,13 +154,13 @@ func (h *ServerHandler) RotateSecret(ctx khttp.Context, account *biz.Account) er
 
 // Delete 软删除指定服务器，记录不存在或已经删除时返回 404
 // POST /api/v1/admin/servers/delete
-func (h *ServerHandler) Delete(ctx khttp.Context, account *biz.Account) error {
+func (h *ServerHandler) Delete(ctx khttp.Context, actorID int64) error {
 	var request serverIDRequest
 	if err := ctx.Bind(&request); err != nil || request.ServerID <= 0 {
 		return ErrInvalidRequest
 	}
 
-	if err := h.serverBiz.Delete(ctx, account.ID, request.ServerID); err != nil {
+	if err := h.serverBiz.Delete(ctx, actorID, request.ServerID); err != nil {
 		return BusinessError(err)
 	}
 	return ctx.Blob(http.StatusNoContent, "", nil)

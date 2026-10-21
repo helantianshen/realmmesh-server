@@ -37,9 +37,9 @@ func Verify(plain, digest string) bool {
 		return false
 	}
 
-	// Strict 拒绝非零尾部填充位，再次编码确保输入没有被解码器忽略的换行字符
+	// 固定文本长度、严格尾部位和解码长度共同限定密钥编码格式
 	raw, err := base64.RawURLEncoding.Strict().DecodeString(plain)
-	if err != nil || len(raw) != secretBytes || base64.RawURLEncoding.EncodeToString(raw) != plain {
+	if err != nil || len(raw) != secretBytes {
 		return false
 	}
 

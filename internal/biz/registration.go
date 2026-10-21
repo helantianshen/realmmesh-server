@@ -42,10 +42,7 @@ func (registrationBiz *RegistrationBiz) Register(ctx context.Context, playerName
 		return nil, err
 	}
 
-	hash, err := password.Hash(plainPassword)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrRegistrationFailed, err)
-	}
+	hash := password.Hash(plainPassword)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

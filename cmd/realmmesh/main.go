@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"fmt"
 	"log"
 	"time"
 
@@ -44,10 +43,6 @@ func run(configPath string) (err error) {
 	generator, err := idgen.New(cfg.ID)
 	if err != nil {
 		return err
-	}
-	// 测试雪花 id 生成器
-	if _, err := generator.NextID(); err != nil {
-		return fmt.Errorf("检查 ID 生成器: %w", err)
 	}
 	log.Print("ID 生成器初始化完成")
 

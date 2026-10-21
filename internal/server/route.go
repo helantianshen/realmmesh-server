@@ -6,6 +6,7 @@ package server
 import (
 	kgrpc "github.com/go-kratos/kratos/v3/transport/grpc"
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
+	authv1 "github.com/helantianshen/realmmesh-server/gen/auth/v1"
 	probev1 "github.com/helantianshen/realmmesh-server/gen/probe/v1"
 	"github.com/helantianshen/realmmesh-server/internal/biz"
 	"github.com/helantianshen/realmmesh-server/internal/config"
@@ -35,6 +36,7 @@ func NewTransports(
 
 	registerHTTPRoutes(httpServer, handlers, businesses.AccountBiz, tokenManager)
 	probev1.RegisterProbeServiceServer(grpcServer, handlers.ProbeHandler)
+	authv1.RegisterAuthServiceServer(grpcServer, handlers.AuthGRPCHandler)
 	return &Transports{HTTP: httpServer, GRPC: grpcServer}, nil
 }
 
@@ -60,11 +62,11 @@ func registerHTTPRoutes(
 	api.POST("/auth/me", requireAccount(accountBiz, tokenManager, false, authHandler.Me))
 	api.POST("/admin/me", requireAccount(accountBiz, tokenManager, true, authHandler.Me))
 
-	// 所有服务器管理操作都要求当前管理员权限，包括列表和详情查询
-	api.POST("/admin/servers/create", requireAccount(accountBiz, tokenManager, true, serverHandler.Create))
-	api.POST("/admin/servers/list", requireAccount(accountBiz, tokenManager, true, serverHandler.List))
-	api.POST("/admin/servers/detail", requireAccount(accountBiz, tokenManager, true, serverHandler.Detail))
-	api.POST("/admin/servers/set-enabled", requireAccount(accountBiz, tokenManager, true, serverHandler.SetEnabled))
-	api.POST("/admin/servers/rotate-secret", requireAccount(accountBiz, tokenManager, true, serverHandler.RotateSecret))
-	api.POST("/admin/servers/delete", requireAccount(accountBiz, tokenManager, true, serverHandler.Delete))
+	// 服务器管理入口验证 JWT，业务层统一查库检查账户及管理员权限
+	api.POST("/admin/servers/create", requireToken(tokenManager, serverHandler.Create))
+	api.POST("/admin/servers/list", requireToken(tokenManager, serverHandler.List))
+	api.POST("/admin/servers/detail", requireToken(tokenManager, serverHandler.Detail))
+	api.POST("/admin/servers/set-enabled", requireToken(tokenManager, serverHandler.SetEnabled))
+	api.POST("/admin/servers/rotate-secret", requireToken(tokenManager, serverHandler.RotateSecret))
+	api.POST("/admin/servers/delete", requireToken(tokenManager, serverHandler.Delete))
 }

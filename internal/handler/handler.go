@@ -9,17 +9,27 @@ import (
 
 // Handlers 保存 HTTP 与 gRPC 使用的协议处理器
 type Handlers struct {
-	AuthHandler   *AuthHandler
-	ServerHandler *ServerHandler
-	ProbeHandler  *ProbeGRPCHandler
+	AuthHandler     *AuthHandler
+	AuthGRPCHandler *AuthGRPCHandler
+	ServerHandler   *ServerHandler
+	ProbeHandler    *ProbeGRPCHandler
 }
 
 // NewHandlers 复用同一组业务对象，创建账户、服务器管理和探测处理器
 func NewHandlers(businesses *biz.Businesses, tokenManager *token.Manager) *Handlers {
 	return &Handlers{
-		AuthHandler:   NewAuthHandler(businesses.RegistrationBiz, businesses.LoginBiz, tokenManager),
-		ServerHandler: NewServerHandler(businesses.ServerBiz),
-		ProbeHandler:  NewProbeGRPCHandler(),
+		AuthHandler:     NewAuthHandler(businesses.RegistrationBiz, businesses.LoginBiz, tokenManager),
+		AuthGRPCHandler: NewAuthGRPCHandler(businesses.RegistrationBiz, businesses.LoginBiz),
+		ServerHandler:   NewServerHandler(businesses.ServerBiz),
+		ProbeHandler:    NewProbeGRPCHandler(),
+	}
+}
+
+// NewAuthGRPCHandler 注入共享注册和登录业务，游戏认证不依赖令牌管理器
+func NewAuthGRPCHandler(registrationBiz *biz.RegistrationBiz, loginBiz *biz.LoginBiz) *AuthGRPCHandler {
+	return &AuthGRPCHandler{
+		registrationBiz: registrationBiz,
+		loginBiz:        loginBiz,
 	}
 }
 

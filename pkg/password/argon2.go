@@ -8,7 +8,6 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
-	"fmt"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
@@ -28,13 +27,11 @@ const (
 // 先生成随机盐，再使用密码和盐计算哈希，最后将盐与哈希编码为文本
 // 返回值同时保存算法、版本和计算参数，校验密码时使用其中的盐重算哈希
 // 盐可以与哈希一起保存，明文密码不会包含在返回值中
-func Hash(plain string) (string, error) {
+func Hash(plain string) string {
 	// 第一步：生成随机盐，让相同密码的多次哈希使用不同的随机输入
 	salt := make([]byte, saltLength)
-	// rand.Read 使用密码学安全随机数填满 salt
-	if _, err := rand.Read(salt); err != nil {
-		return "", fmt.Errorf("%w: %w", ErrSaltGeneration, err)
-	}
+	// rand.Read 填满随机盐；当前 Go 版本在随机源失败时终止进程，不返回错误
+	rand.Read(salt)
 
 	// 第二步：计算密码哈希，参数依次为密码、盐、迭代轮数、内存 KiB 数、并行度和输出字节数
 	key := argon2.IDKey(
@@ -61,7 +58,7 @@ func Hash(plain string) (string, error) {
 		encodedKey,
 	}, "$")
 
-	return encoded, nil
+	return encoded
 }
 
 // Verify 将待验证密码与数据库中保存的 Argon2id 编码串进行核对

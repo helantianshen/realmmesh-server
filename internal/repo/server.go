@@ -5,7 +5,6 @@ package repo
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 
 	"github.com/helantianshen/realmmesh-server/internal/model"
@@ -65,26 +64,18 @@ func serverWriteResult(result *gorm.DB) error {
 	return nil
 }
 
-// List 在同一只读快照中查询总数和当前页，避免并发写入造成二者不一致
-// 只选择管理页面所需字段，不读取密钥摘要；软删除记录由 GORM 自动排除
+// List 分别查询总数和当前页，并发增删时二者可能短暂不一致
+// 分页参数由业务层校验，查询只读取公开字段并自动排除软删除记录
 func (r *ServerRepository) List(ctx context.Context, params pagination.Params) ([]model.Server, int64, error) {
-	if err := params.Validate(); err != nil {
-		return nil, 0, err
-	}
-
 	records := make([]model.Server, 0)
 	var total int64
+	if err := r.db.WithContext(ctx).Model(&model.Server{}).Count(&total).Error; err != nil {
+		return nil, 0, repositoryError("统计服务器", err)
+	}
 
-	// REPEATABLE READ 让总数与数据页使用同一快照，ReadOnly 禁止此事务执行写入
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.Server{}).Count(&total).Error; err != nil {
-			return err
-		}
-
-		// Offset/Limit 复用公共分页参数，固定 ID 倒序使跨页排序稳定
-		return tx.Select("id", "server_name", "enabled", "created_at", "updated_at").
-			Order("id DESC").Offset(params.Offset()).Limit(params.PageSize).Find(&records).Error
-	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	// 固定 ID 倒序，Offset 和 Limit 使用业务层已校验的分页值
+	err := r.db.WithContext(ctx).Select("id", "server_name", "enabled", "created_at", "updated_at").
+		Order("id DESC").Offset(params.Offset()).Limit(params.PageSize).Find(&records).Error
 	if err != nil {
 		return nil, 0, repositoryError("分页查询服务器", err)
 	}
