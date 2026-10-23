@@ -17,6 +17,8 @@ bash scripts/generate-proto.sh
 
 生成文件不手工修改。安装工具及下载依赖需要网络或已有缓存。
 
+当前仓库协议尚未提交到固定子模块版本，本地第三阶段生成需显式指向相邻协议工作树：`REALMMESH_PROTO_DIR=../realmmesh-proto bash scripts/generate-proto.sh`。不要把未提交的工作树生成结果视为固定引用已可复现；协议提交和消费者引用推进需另行授权。
+
 ## 配置与启动
 
 复制 `configs/config.yaml` 为 `configs/config.local.yaml`，通过 `-conf` 指定。配置字段以仓库示例为准：
@@ -32,9 +34,9 @@ bash scripts/generate-proto.sh
 
 配置在启动时读取，修改后重启。真实本机配置不纳入 Git；示例值需要替换。JWT 使用 HS256，不自动刷新，不提供单令牌撤销；更换签名密钥使旧令牌失效，调整有效期只影响随后签发的令牌。多实例互认令牌需使用同一签名密钥。
 
-数据库必须预先存在。服务连接并 Ping 数据库后，在同一事务内迁移 users、servers、system_configs 并初始化默认配置，失败则退出，不启动 HTTP/gRPC 监听。连接和迁移共用 15 秒启动期限；连接池最多 10 个连接、2 个空闲连接，连接生命周期 30 分钟。
+数据库必须预先存在。服务连接并 Ping 数据库后，在同一事务内迁移 users、servers、system_configs、player_connection_events、business_operation_events 以及 warehouse_items / warehouse_operations / warehouse_events，建立仓库部分唯一索引并初始化默认配置；失败则退出，不启动 HTTP/gRPC 监听。连接和迁移共用 15 秒启动期限；连接池最多 10 个连接、2 个空闲连接，连接生命周期 30 分钟。
 
-`system_configs` 中的 `auth.login_timeout_seconds` 是全服共用的玩家登录时限，单位为秒，默认 60，合法范围为 1–2147483647。启动初始化只补齐缺失项，不覆盖已有值；软删除或非法值会阻止启动。`ConfigService.GetConfig` 每次验证服务器凭据后读取数据库当前值，修改该项无需重启中心。运行期间缺失或非法配置返回 `Internal`，不会回退为默认值。游戏服轮询和登录超时执行需由 Mod 接入，中心提供接口不代表 Mod 已生效。
+`system_configs` 中的 `auth.login_timeout_seconds` 是全服共用的玩家登录时限，单位为秒，默认 60，合法范围为 1–2147483647。启动初始化只补齐缺失项，不覆盖已有值；软删除或非法值会阻止启动。`ConfigService.GetConfig` 每次验证服务器凭据后读取数据库当前值，修改该项无需重启中心。运行期间缺失或非法配置返回 `Internal`，不会回退为默认值。Mod 启动时拉取配置，此后每 30 秒异步刷新；失败保留上次有效值。玩家进入时固定该连接的登录期限，配置更新不延长或缩短已有连接的期限。
 
 启动迁移不会自动删除列、重命名列或转换历史业务数据。模型主键由 Sonyflake v2 生成；固定 1ms 时间单位、12 位序列、10 位节点，起点为 2026-01-01 UTC。当前无节点占用检测或跨重启生成状态持久化，同节点快速重启及回拨后的唯一性不作保证。
 
@@ -44,12 +46,14 @@ bash scripts/generate-proto.sh
 
 先通过普通注册创建账户；首位管理员由部署者确认账户后在数据库中设置 users.is_admin=1。没有默认管理员或管理员初始化接口。
 
-system_configs 保存所有游戏服共用的登录策略：
+system_configs 保存所有游戏服共用的中心策略：
 
 | 键 | 默认值 | 含义 |
 | --- | --- | --- |
+| auth.login_timeout_seconds | 60 | 玩家登录时限，单位为秒，刷新后仅影响新连接 |
 | auth.max_failures | 3 | 达到该失败次数立即进入休息期 |
 | auth.cooldown_seconds | 300 | 休息时长，单位为秒 |
+| warehouse.policy | only_whitelist=false，黑白名单为空 | 完整仓库名单 JSON；通过管理员 HTTP 整体替换，规则见 WAREHOUSE.md |
 
 启动只补齐缺失项，不覆盖已有值；非法值或必需项被软删除会导致启动失败。登录每次读取中心策略。休息期内不校验密码且不延长截止时间，到期恢复尝试；不存在账户和注册失败不计数。HTTP 登录返回休息信息，不执行游戏踢人。
 

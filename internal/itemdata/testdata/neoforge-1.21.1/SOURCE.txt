@@ -1,0 +1,10 @@
+来源：realmmesh-mod/scripts/fixtures/WarehouseItemsDiagnostic.java
+生成环境：Minecraft 1.21.1 / NeoForge，实际 ItemStack.SINGLE_ITEM_CODEC + NbtIo.writeUnnamedTag
+这五份样本验证原生物品数据互操作，不代表日常世界或跨服全链路验收
+数量固定为单件且载荷不含根 count；嵌套 count 属于业务数据，必须保留
+
+stone.nbt SHA-256 77390509524f8131991110c700413674531de845f8b30d0b855ff64659f50b6b
+named.nbt SHA-256 f4299bfbefd6a3a4958de037147dba34c6188928897fefb8974ba693c22e76dc
+damaged.nbt SHA-256 b2688062101ddf1c50a935a7a90010ecd9ffec4c9ca6e355ff8105b5fbc5f716
+nested.nbt SHA-256 7cea27c3077a7ec7352bd9a39160b9a3804db4bc1c1beddfe1510e3418874047
+enchanted.nbt SHA-256 72ccb36f33f9ed554f29cfcf2d5ff79451e5e226e0e7ddf7c51c2cef86ba51db

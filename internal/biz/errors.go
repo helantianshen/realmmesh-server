@@ -49,3 +49,10 @@ var (
 	ErrPlayerConnectionEventInvalid = errors.New("玩家连接审计参数无效")
 	ErrPlayerConnectionEventWrite   = errors.New("玩家连接审计写入失败")
 )
+
+var (
+	ErrWarehouseInvalid  = errors.New("仓库参数无效")
+	ErrWarehouseDenied   = errors.New("物品不符合中心存入名单")
+	ErrWarehouseIdentity = errors.New("仓库账户或服务器身份无效")
+	ErrWarehouseInternal = errors.New("仓库处理失败")
+)

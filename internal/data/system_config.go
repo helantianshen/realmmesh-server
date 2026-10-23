@@ -17,6 +17,7 @@ import (
 // InitSystemConfig 在调用方事务内补齐默认配置，保留已存在的值并校验必需项
 func InitSystemConfig(ctx context.Context, tx *gorm.DB, generator *sonyflake.Sonyflake) error {
 	defaultConfigs := []model.SystemConfig{
+		{Key: model.ConfigWarehousePolicy, Value: `{"only_whitelist":false,"blacklist":[],"whitelist":[]}`},
 		{
 			Key:   model.ConfigAuthLoginTimeoutSeconds,
 			Value: "60",
@@ -58,6 +59,9 @@ func InitSystemConfig(ctx context.Context, tx *gorm.DB, generator *sonyflake.Son
 		return fmt.Errorf("%w: %w", ErrSystemConfigInitialization, err)
 	}
 	if _, err := systemConfigRepo.LoginTimeoutSeconds(ctx); err != nil {
+		return fmt.Errorf("%w: %w", ErrSystemConfigInitialization, err)
+	}
+	if _, err := systemConfigRepo.WarehousePolicy(ctx); err != nil {
 		return fmt.Errorf("%w: %w", ErrSystemConfigInitialization, err)
 	}
 	return nil

@@ -10,6 +10,7 @@ import (
 
 	kerrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/helantianshen/realmmesh-server/internal/biz"
+	"github.com/helantianshen/realmmesh-server/internal/itemdata"
 	"github.com/helantianshen/realmmesh-server/internal/repo"
 	"github.com/helantianshen/realmmesh-server/pkg/pagination"
 	"google.golang.org/grpc/codes"
@@ -130,4 +131,47 @@ func rpcAuditError(err error) error {
 	default:
 		return errRPCAuditInternal
 	}
+}
+
+var (
+	errRPCWarehouseInternal = status.Error(codes.Internal, "仓库结果未确认，请保留操作编号核对")
+	errRPCWarehouseInvalid  = status.Error(codes.InvalidArgument, "仓库请求或物品数据无效")
+	errRPCWarehouseIdentity = status.Error(codes.PermissionDenied, "仓库账户或服务器身份无效")
+	errRPCWarehouseDenied   = status.Error(codes.FailedPrecondition, "物品不符合存入名单")
+	errRPCWarehouseConflict = status.Error(codes.AlreadyExists, "仓库操作编号或结果冲突")
+	errRPCWarehouseMissing  = status.Error(codes.NotFound, "库存不足或记录不存在")
+	errRPCWarehouseLimit    = status.Error(codes.ResourceExhausted, "仓库数量超过上限")
+	errRPCWarehouseData     = status.Error(codes.FailedPrecondition, "物品数据或状态不一致")
+)
+
+// rpcWarehouseError 区分明确拒绝与未知提交结果，数据库故障不能被游戏服当作安全退款依据
+func rpcWarehouseError(err error) error {
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return status.FromContextError(err).Err()
+	case errors.Is(err, biz.ErrWarehouseInvalid), errors.Is(err, repo.ErrWarehouseInvalid), errors.Is(err, itemdata.ErrMalformed), errors.Is(err, itemdata.ErrLimit), errors.Is(err, itemdata.ErrItemID):
+		return errRPCWarehouseInvalid
+	case errors.Is(err, biz.ErrWarehouseIdentity), errors.Is(err, biz.ErrAccountUnavailable):
+		return errRPCWarehouseIdentity
+	case errors.Is(err, biz.ErrWarehouseDenied), errors.Is(err, repo.ErrWarehouseDepositDenied):
+		return errRPCWarehouseDenied
+	case errors.Is(err, repo.ErrWarehouseOperationConflict):
+		return errRPCWarehouseConflict
+	case errors.Is(err, repo.ErrWarehouseItemNotFound), errors.Is(err, repo.ErrWarehouseOperationNotFound):
+		return errRPCWarehouseMissing
+	case errors.Is(err, repo.ErrWarehouseQuantityLimit):
+		return errRPCWarehouseLimit
+	case errors.Is(err, repo.ErrWarehouseHashCollision), errors.Is(err, repo.ErrWarehouseStateConflict):
+		return errRPCWarehouseData
+	default:
+		return errRPCWarehouseInternal
+	}
+}
+
+// warehouseHTTPError 保留管理权限错误，名单输入错误不返回内部失败
+func warehouseHTTPError(err error) error {
+	if errors.Is(err, itemdata.ErrRule) || errors.Is(err, biz.ErrWarehouseInvalid) {
+		return ErrInvalidRequest
+	}
+	return BusinessError(err)
 }

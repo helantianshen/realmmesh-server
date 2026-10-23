@@ -16,7 +16,7 @@
 
 登录密码错误、未注册、休息期通过正常 RPC 响应返回。非法名字或注册密码返回 InvalidArgument，重名返回 AlreadyExists，服务器凭据无效返回 Unauthenticated。仓储访问失败返回 Unavailable；配置异常、损坏密码哈希及未知内部错误返回 Internal。取消和超时保留 Canceled、DeadlineExceeded，响应不包含底层诊断详情。
 
-不要自动重放注册或登录请求：超时可能发生在事务已提交之后，重试登录可能再次计数。Mod 命令、实际 kick 和旧连接响应隔离需要由游戏侧实现，中心返回标记不等于已经执行游戏操作。
+不要自动重放注册或登录请求：超时可能发生在事务已提交之后，重试登录可能再次计数。Mod 已实现命令、实际 kick 和旧连接响应隔离；中心响应仅表达业务结果，游戏服负责执行对应连接操作。
 
 ## 自助改密
 
@@ -26,11 +26,11 @@
 
 改密成功、账户不存在及休息期均要求清除本次连接认证并退出，旧密码错误未达到阈值时允许继续尝试。成功响应和 `PASSWORD_CHANGED` 通知无先后保证，不得自动重试，也不能让迟到结果影响重连后的玩家。改密不自动撤销已有 HTTP JWT。
 
-通知通过 `SubscribeAccountEvents` 服务端流发送，仅覆盖当前中心进程的在线订阅者。改密或删除提交失败不广播，广播失败不回滚已经提交的变更，不补发。Mod 改密命令尚未接入。
+通知通过 `SubscribeAccountEvents` 服务端流发送，仅覆盖当前中心进程的在线订阅者。改密或删除提交失败不广播，广播失败不回滚已经提交的变更，不补发。Mod 已接入 `/realmmesh password <旧密码> <新密码> <确认新密码>`，并订阅账户变更通知。
 
 ## 开发验证
 
-协议生成命令仍为 `bash scripts/generate-proto.sh`，同时生成 probe、auth 与 config，输出到 `gen/`。
+协议生成命令仍为 `bash scripts/generate-proto.sh`，同时生成 probe、auth、config 与 audit，输出到 `gen/`。
 
 ```bash
 go test -race ./...

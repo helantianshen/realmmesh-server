@@ -9,25 +9,29 @@ import (
 
 // Handlers 保存 HTTP 与 gRPC 使用的协议处理器
 type Handlers struct {
-	AuditGRPCHandler  *AuditGRPCHandler
-	AccountHandler    *AccountHandler
-	ConfigGRPCHandler *ConfigGRPCHandler
-	AuthHandler       *AuthHandler
-	AuthGRPCHandler   *AuthGRPCHandler
-	ServerHandler     *ServerHandler
-	ProbeHandler      *ProbeGRPCHandler
+	WarehouseGRPCHandler *WarehouseGRPCHandler
+	WarehouseHandler     *WarehouseHandler
+	AuditGRPCHandler     *AuditGRPCHandler
+	AccountHandler       *AccountHandler
+	ConfigGRPCHandler    *ConfigGRPCHandler
+	AuthHandler          *AuthHandler
+	AuthGRPCHandler      *AuthGRPCHandler
+	ServerHandler        *ServerHandler
+	ProbeHandler         *ProbeGRPCHandler
 }
 
 // NewHandlers 复用同一组业务对象，创建账户、服务器管理和探测处理器
 func NewHandlers(businesses *biz.Businesses, tokenManager *token.Manager) *Handlers {
 	return &Handlers{
-		AuditGRPCHandler:  NewAuditGRPCHandler(businesses.PlayerConnectionEventBiz),
-		AccountHandler:    NewAccountHandler(businesses.AccountBiz),
-		ConfigGRPCHandler: NewConfigGRPCHandler(businesses.SystemConfigBiz),
-		AuthHandler:       NewAuthHandler(businesses.RegistrationBiz, businesses.LoginBiz, tokenManager),
-		AuthGRPCHandler:   NewAuthGRPCHandler(businesses.RegistrationBiz, businesses.LoginBiz, businesses.AccountEventBiz, businesses.AccountBiz),
-		ServerHandler:     NewServerHandler(businesses.ServerBiz),
-		ProbeHandler:      NewProbeGRPCHandler(),
+		WarehouseGRPCHandler: NewWarehouseGRPCHandler(businesses.WarehouseBiz),
+		WarehouseHandler:     NewWarehouseHandler(businesses.WarehouseBiz),
+		AuditGRPCHandler:     NewAuditGRPCHandler(businesses.PlayerConnectionEventBiz),
+		AccountHandler:       NewAccountHandler(businesses.AccountBiz),
+		ConfigGRPCHandler:    NewConfigGRPCHandler(businesses.SystemConfigBiz),
+		AuthHandler:          NewAuthHandler(businesses.RegistrationBiz, businesses.LoginBiz, tokenManager),
+		AuthGRPCHandler:      NewAuthGRPCHandler(businesses.RegistrationBiz, businesses.LoginBiz, businesses.AccountEventBiz, businesses.AccountBiz),
+		ServerHandler:        NewServerHandler(businesses.ServerBiz),
+		ProbeHandler:         NewProbeGRPCHandler(),
 	}
 }
 
@@ -82,4 +86,14 @@ func NewAccountHandler(accountBiz *biz.AccountBiz) *AccountHandler {
 // NewAuditGRPCHandler 注入玩家连接审计业务，复用统一服务器认证
 func NewAuditGRPCHandler(playerConnectionEventBiz *biz.PlayerConnectionEventBiz) *AuditGRPCHandler {
 	return &AuditGRPCHandler{playerConnectionEventBiz: playerConnectionEventBiz}
+}
+
+// NewWarehouseGRPCHandler 注入共享仓库业务，身份校验沿用统一拦截器
+func NewWarehouseGRPCHandler(warehouseBiz *biz.WarehouseBiz) *WarehouseGRPCHandler {
+	return &WarehouseGRPCHandler{warehouseBiz: warehouseBiz}
+}
+
+// NewWarehouseHandler 注入仓库名单管理业务
+func NewWarehouseHandler(warehouseBiz *biz.WarehouseBiz) *WarehouseHandler {
+	return &WarehouseHandler{warehouseBiz: warehouseBiz}
 }

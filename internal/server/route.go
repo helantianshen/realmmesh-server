@@ -10,6 +10,7 @@ import (
 	authv1 "github.com/helantianshen/realmmesh-server/gen/auth/v1"
 	configv1 "github.com/helantianshen/realmmesh-server/gen/config/v1"
 	probev1 "github.com/helantianshen/realmmesh-server/gen/probe/v1"
+	warehousev1 "github.com/helantianshen/realmmesh-server/gen/warehouse/v1"
 	"github.com/helantianshen/realmmesh-server/internal/biz"
 	"github.com/helantianshen/realmmesh-server/internal/config"
 	"github.com/helantianshen/realmmesh-server/internal/handler"
@@ -41,6 +42,7 @@ func NewTransports(
 	authv1.RegisterAuthServiceServer(grpcServer, handlers.AuthGRPCHandler)
 	configv1.RegisterConfigServiceServer(grpcServer, handlers.ConfigGRPCHandler)
 	auditv1.RegisterAuditServiceServer(grpcServer, handlers.AuditGRPCHandler)
+	warehousev1.RegisterWarehouseServiceServer(grpcServer, handlers.WarehouseGRPCHandler)
 	return &Transports{HTTP: httpServer, GRPC: grpcServer}, nil
 }
 
@@ -58,7 +60,7 @@ func registerHTTPRoutes(
 	router.GET("/healthz", handler.HealthHandler)
 
 	// 账户接口统一禁止缓存，注册和登录本身不要求已有令牌
-	api := srv.Route("/api/v1", noStore)
+	api := srv.Route("/api/v1", noStore, operationRequest)
 	api.POST("/auth/register", authHandler.Register)
 	api.POST("/auth/login", authHandler.Login)
 
@@ -67,6 +69,8 @@ func registerHTTPRoutes(
 	api.POST("/admin/me", requireAccount(accountBiz, tokenManager, true, authHandler.Me))
 
 	api.POST("/admin/users/delete", requireToken(tokenManager, handlers.AccountHandler.Delete))
+	api.POST("/admin/warehouse/policy", requireToken(tokenManager, handlers.WarehouseHandler.Policy))
+	api.POST("/admin/warehouse/set-policy", requireToken(tokenManager, handlers.WarehouseHandler.SetPolicy))
 
 	// 服务器管理入口验证 JWT，业务层统一查库检查账户及管理员权限
 	api.POST("/admin/servers/create", requireToken(tokenManager, serverHandler.Create))

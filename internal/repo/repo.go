@@ -6,19 +6,23 @@ import "gorm.io/gorm"
 
 // Repositories 保存中心服务共用的仓储对象
 type Repositories struct {
-	PlayerConnectionEventRepo *PlayerConnectionEventRepository
-	UserRepo                  *UserRepository
-	SystemConfigRepo          *SystemConfigRepository
-	ServerRepo                *ServerRepository
+	WarehouseRepo              *WarehouseRepository
+	BusinessOperationEventRepo *BusinessOperationEventRepository
+	PlayerConnectionEventRepo  *PlayerConnectionEventRepository
+	UserRepo                   *UserRepository
+	SystemConfigRepo           *SystemConfigRepository
+	ServerRepo                 *ServerRepository
 }
 
 // NewRepositories 使用同一连接池创建各实体仓储
 func NewRepositories(db *gorm.DB) *Repositories {
 	return &Repositories{
-		PlayerConnectionEventRepo: NewPlayerConnectionEventRepository(db),
-		UserRepo:                  NewUserRepository(db),
-		SystemConfigRepo:          NewSystemConfigRepository(db),
-		ServerRepo:                NewServerRepository(db),
+		WarehouseRepo:              NewWarehouseRepository(db),
+		BusinessOperationEventRepo: NewBusinessOperationEventRepository(db),
+		PlayerConnectionEventRepo:  NewPlayerConnectionEventRepository(db),
+		UserRepo:                   NewUserRepository(db),
+		SystemConfigRepo:           NewSystemConfigRepository(db),
+		ServerRepo:                 NewServerRepository(db),
 	}
 }
 
@@ -41,3 +45,11 @@ func NewServerRepository(db *gorm.DB) *ServerRepository {
 func NewPlayerConnectionEventRepository(db *gorm.DB) *PlayerConnectionEventRepository {
 	return &PlayerConnectionEventRepository{db: db}
 }
+
+// NewBusinessOperationEventRepository 组装业务事务之外使用的审计仓储
+func NewBusinessOperationEventRepository(db *gorm.DB) *BusinessOperationEventRepository {
+	return &BusinessOperationEventRepository{db: db}
+}
+
+// NewWarehouseRepository 复用连接池，仓库写入自行控制短事务
+func NewWarehouseRepository(db *gorm.DB) *WarehouseRepository { return &WarehouseRepository{db: db} }

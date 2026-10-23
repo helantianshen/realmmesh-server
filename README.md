@@ -2,7 +2,7 @@
 
 Go/Kratos 中心服务，提供账户注册、登录、JWT 身份查询、管理员服务器管理，以及带服务器凭据认证的 gRPC Echo。使用 PostgreSQL + GORM 持久化，启动时执行迁移和默认系统配置初始化。
 
-中心已提供玩家注册与登录 RPC；Mod 的游戏内注册登录、实际踢人和资产功能尚未接入。
+第二阶段已实现玩家注册登录、门禁与登录超时、自助改密、管理员删除账户、配置热更新、账户变更通知，以及连接和业务操作审计。第三阶段共享仓库已接入协议、中心与 NeoForge Mod；通过数据库、隔离逻辑及真实双服双客户端跨服联调；第三方物品与成品 JAR 部署尚未验证，等待用户审查。
 
 ## 使用文档
 
@@ -10,6 +10,8 @@ Go/Kratos 中心服务，提供账户注册、登录、JWT 身份查询、管理
 - [HTTP API](docs/HTTP_API.md)
 - [玩家认证 RPC](docs/PLAYER_AUTH_RPC.md)
 - [玩家连接审计](docs/PLAYER_CONNECTION_AUDIT.md)
+- [中心业务操作审计](docs/BUSINESS_OPERATION_AUDIT.md)
+- [共享物品仓库与名单配置](docs/WAREHOUSE.md)
 - [代码结构](docs/CODE_STRUCTURE.md)
 
 ## 快速开始

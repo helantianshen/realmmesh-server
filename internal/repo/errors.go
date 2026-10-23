@@ -38,3 +38,14 @@ var ErrUserNotFound = errors.New("账户不存在或已删除")
 var ErrAdminDeletionForbidden = errors.New("禁止删除管理员账户")
 
 var ErrServerNotFound = errors.New("服务器不存在或已删除")
+
+var (
+	ErrWarehouseInvalid           = errors.New("仓库操作参数无效")
+	ErrWarehouseItemNotFound      = errors.New("仓库物品不存在或数量不足")
+	ErrWarehouseOperationNotFound = errors.New("仓库操作不存在")
+	ErrWarehouseOperationConflict = errors.New("仓库操作 ID 或完成结果冲突")
+	ErrWarehouseHashCollision     = errors.New("仓库物品哈希相同但完整数据不同")
+	ErrWarehouseQuantityLimit     = errors.New("仓库物品数量达到上限")
+	ErrWarehouseStateConflict     = errors.New("仓库物品或操作状态不一致")
+	ErrWarehouseDepositDenied     = errors.New("仓库名单拒绝本次存入")
+)

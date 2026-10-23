@@ -5,10 +5,14 @@ package repo
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/helantianshen/realmmesh-server/internal/itemdata"
+	"io"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/helantianshen/realmmesh-server/internal/model"
@@ -101,4 +105,38 @@ func (r *SystemConfigRepository) LoginTimeoutSeconds(ctx context.Context) (int32
 		return 0, fmt.Errorf("%w: %s 必须是 int32 范围内的正整数", ErrSystemConfigInvalid, config.Key)
 	}
 	return int32(seconds), nil
+}
+
+// WarehousePolicy 读取完整名单快照，缺失或损坏时拒绝入库而非默认放行
+func (r *SystemConfigRepository) WarehousePolicy(ctx context.Context) (itemdata.Policy, error) {
+	var record model.SystemConfig
+	err := r.db.WithContext(ctx).Where("key = ?", model.ConfigWarehousePolicy).First(&record).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return itemdata.Policy{}, ErrSystemConfigMissing
+	}
+	if err != nil {
+		return itemdata.Policy{}, repositoryError("读取仓库名单", err)
+	}
+	var policy *itemdata.Policy
+	decoder := json.NewDecoder(strings.NewReader(record.Value))
+	decoder.DisallowUnknownFields()
+	if len(record.Value) > 65536 || decoder.Decode(&policy) != nil || policy == nil || policy.Validate() != nil {
+		return itemdata.Policy{}, ErrSystemConfigInvalid
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		return itemdata.Policy{}, ErrSystemConfigInvalid
+	}
+	return *policy, nil
+}
+
+// SetWarehousePolicy 仅更新现有有效配置，整个规则集合在一次写入后生效
+func (r *SystemConfigRepository) SetWarehousePolicy(ctx context.Context, encoded string) error {
+	result := r.db.WithContext(ctx).Model(&model.SystemConfig{}).Where("key = ?", model.ConfigWarehousePolicy).Update("value", encoded)
+	if result.Error != nil {
+		return repositoryError("保存仓库名单", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return ErrSystemConfigMissing
+	}
+	return nil
 }

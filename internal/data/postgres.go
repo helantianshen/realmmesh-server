@@ -40,7 +40,7 @@ func OpenPostgres(ctx context.Context, cfg config.PostgresConfig) (*gorm.DB, err
 		return nil, databaseError("获取数据库连接池", err)
 	}
 	pool.SetMaxOpenConns(10)
-	pool.SetMaxIdleConns(2)
+	pool.SetMaxIdleConns(10)
 	pool.SetConnMaxLifetime(30 * time.Minute)
 	if err := pool.PingContext(ctx); err != nil {
 		_ = pool.Close()
@@ -59,9 +59,16 @@ func Migrate(ctx context.Context, db *gorm.DB, generator *sonyflake.Sonyflake) e
 			&model.SystemConfig{},
 			&model.Server{},
 			&model.PlayerConnectionEvent{},
+			&model.BusinessOperationEvent{},
+			&model.WarehouseItem{},
+			&model.WarehouseOperation{},
+			&model.WarehouseEvent{},
 		)
 		if err != nil {
 			return databaseError("迁移表结构", err)
+		}
+		if err := MigrateWarehouseConstraints(tx); err != nil {
+			return err
 		}
 		return InitSystemConfig(ctx, tx, generator)
 	})

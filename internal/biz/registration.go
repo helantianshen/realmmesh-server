@@ -21,8 +21,9 @@ var (
 )
 
 type RegistrationBiz struct {
-	userRepo *repo.UserRepository
-	ids      *sonyflake.Sonyflake
+	businessOperationBiz *BusinessOperationBiz
+	userRepo             *repo.UserRepository
+	ids                  *sonyflake.Sonyflake
 }
 
 type RegisteredUser struct {
@@ -32,6 +33,21 @@ type RegisteredUser struct {
 
 // Register 校验注册信息并创建普通账户，返回不含密码哈希的账户信息
 func (registrationBiz *RegistrationBiz) Register(ctx context.Context, playerName, plainPassword string) (*RegisteredUser, error) {
+	user, err := registrationBiz.register(ctx, playerName, plainPassword)
+	event := OperationEvent{Operation: OperationRegister, TargetType: "account", PlayerName: playerName}
+	if user != nil {
+		event.ActorUserID = user.ID
+		event.TargetID = user.ID
+		event.PlayerName = user.PlayerName
+	}
+
+	// 注册落库或拒绝结果已确定，审计不会改变账户创建结果
+	registrationBiz.businessOperationBiz.Record(ctx, event, err)
+	return user, err
+}
+
+// register 执行账户创建，原始密码只交给密码工具，不进入审计数据
+func (registrationBiz *RegistrationBiz) register(ctx context.Context, playerName, plainPassword string) (*RegisteredUser, error) {
 	if !playerNamePattern.MatchString(playerName) {
 		return nil, ErrPlayerNameInvalid
 	}

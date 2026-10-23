@@ -1,5 +1,9 @@
 # HTTP API
 
+## 仓库名单配置
+
+`POST /api/v1/admin/warehouse/policy` 查询完整名单；`POST /api/v1/admin/warehouse/set-policy` 整体替换名单。两者要求 Bearer JWT 和当前管理员权限。设置正文上限 64 KiB（其他 JSON 接口仍为 4096 字节），规则、示例及失败边界见 [共享物品仓库](WAREHOUSE.md)。没有通过 HTTP 修改玩家游戏背包的接口。
+
 ## 账户接口
 
 注册不会自动签发令牌，登录成功才返回 JWT。首位管理员通过普通注册后由部署者手动设置，注册请求不能指定权限。

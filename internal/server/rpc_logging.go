@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/helantianshen/realmmesh-server/internal/biz"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -20,7 +21,11 @@ import (
 // rpcRequestID 保留单个非空关联标识，128 字节上限限制日志字段大小
 func rpcRequestID(ctx context.Context) string {
 	md, _ := metadata.FromIncomingContext(ctx)
-	values := md.Get("x-request-id")
+	return requestID(md.Get("x-request-id"))
+}
+
+// requestID 复用单个有界关联标识，否则生成 UUID；标识不参与身份认证或请求去重
+func requestID(values []string) string {
 	if len(values) == 1 && len(values[0]) > 0 && len(values[0]) <= 128 {
 		return values[0]
 	}
@@ -32,6 +37,7 @@ func rpcLoggingInterceptor(logger *slog.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		started := time.Now()
 		requestID := rpcRequestID(ctx)
+		ctx = biz.WithOperationRequest(ctx, biz.OperationRequest{Source: "grpc", RequestID: requestID})
 		method := strings.TrimPrefix(info.FullMethod, "/")
 		logger.InfoContext(ctx, "rpc", "event", "rpc_server_start", "request_id", requestID, "method", method)
 

@@ -31,11 +31,13 @@ type LoginResult struct {
 	CooldownUntil     *time.Time
 	RetryAfterSeconds int64
 	Kick              bool
+	EnteredCooldown   bool // 仅本次密码错误新建休息期时为 true，不写入对外协议
 }
 
 type LoginBiz struct {
-	userRepo         *repo.UserRepository
-	systemConfigRepo *repo.SystemConfigRepository
+	businessOperationBiz *BusinessOperationBiz
+	userRepo             *repo.UserRepository
+	systemConfigRepo     *repo.SystemConfigRepository
 }
 
 // Authenticate 校验登录并持久化失败状态，正常拒绝通过 LoginResult 返回
@@ -45,6 +47,7 @@ type LoginBiz struct {
 // 需要写入的结果仅在事务提交成功后返回，基础设施异常不视为密码错误
 func (loginBiz *LoginBiz) Authenticate(ctx context.Context, playerName, plainPassword string) (*LoginResult, error) {
 	result, err := loginBiz.authenticate(ctx, playerName, plainPassword, nil)
+	loginBiz.businessOperationBiz.RecordAuthentication(ctx, OperationLogin, playerName, result, err)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrLoginFailed, err)
 	}
@@ -139,6 +142,7 @@ func (loginBiz *LoginBiz) authenticate(ctx context.Context, playerName, plainPas
 			deadline := now.Add(policy.Cooldown)
 			user.CooldownUntil = &deadline
 			result = cooldownResult(user, now)
+			result.EnteredCooldown = true
 			return true, nil
 		}
 

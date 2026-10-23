@@ -11,7 +11,8 @@
 | internal/data | PostgreSQL 连接、表迁移、系统配置初始化 |
 | internal/model | GORM 表结构和显式表名 |
 | internal/repo | 按实体组织查询和写入；repo.go 集中构造并返回 Repositories |
-| internal/biz | 账户和服务器业务规则；biz.go 集中构造并返回 Businesses |
+| internal/biz | 账户、服务器与仓库业务规则；biz.go 集中构造并返回 Businesses |
+| internal/itemdata | 有界 NBT 解析、规范化和有限名单匹配，不执行游戏代码 |
 | internal/handler | HTTP/gRPC 请求响应适配；handler.go 集中构造并返回 Handlers |
 | internal/server | HTTP/gRPC 传输配置、认证及日志；route.go 统一绑定路由并返回 Transports |
 | pkg | password、idgen、token、serversecret、pagination 工具 |
@@ -35,7 +36,7 @@ repo.NewRepositories(db)
 
 普通请求从 server 的路由与认证入口进入 handler，再调用 biz 和 repo。model 描述数据映射，data 负责启动基础设施，不作为请求处理的额外业务层。
 
-数据库连接关闭 GORM 默认写事务包装，普通单条写入使用 PostgreSQL 自动提交；当前没有关联写入或模型写入钩子。多步原子操作仅在启动迁移与账户密码/失败状态更新中显式使用事务。后续增加关联写入或多条写入时，需按实际一致性要求决定事务边界。
+数据库连接关闭 GORM 默认写事务包装，普通单条写入使用 PostgreSQL 自动提交。启动迁移、账户密码/失败状态更新及仓库资产操作显式使用短事务。仓库库存、操作去重和资产审计必须在同一事务提交，不在事务内等待游戏服网络响应。
 
 HTTP 方法、路径、路由组及权限绑定集中在 server/route.go；http.go 保留超时、JSON 解码和缓存策略，grpc.go 保留监听配置及认证、日志拦截器。处理器注释标明完整路由，请求响应类型靠近首个使用的处理方法，共用类型只定义一次。
 
@@ -49,4 +50,8 @@ HTTP 方法、路径、路由组及权限绑定集中在 server/route.go；http.
 
 通知仅覆盖当前中心进程的订阅者，每条订阅最多缓存 32 条待发送消息，满时丢弃该订阅的新消息并记录数量告警，不补发。广播不执行网络发送，网络收发仍由每条 gRPC 流独立处理并复查凭据。该机制不提供多个中心实例之间的广播。
 
-中心停服先关闭账户通知通道，使空闲订阅退出，再停止传输服务；传输退出等待上限为五秒。测试用例、生成消息编译及 Mod 构建不代表游戏服已经接入订阅。
+中心停服先关闭账户通知通道，使空闲订阅退出，再停止传输服务；传输退出等待上限为五秒。Mod 已接入账户订阅与断线重连；中心停服恢复和双服账户通知已通过独立实机验收，构建检查本身不替代实机验证。
+
+中心业务操作在各业务入口执行完成后交给 `biz/business_operation.go` 分类，由 `repo/business_operation_event.go` 在业务事务之外追加到 `model/business_operation_event.go` 对应表。HTTP 过滤器与 gRPC 日志拦截器传入同一个请求关联标识，审计不解析协议正文；单次写入最多等待一秒，失败只写安全日志。详见[中心业务操作审计](BUSINESS_OPERATION_AUDIT.md)。
+
+共享仓库由 `handler/warehouse_grpc.go` → `biz/warehouse.go` → `repo/warehouse.go` 处理；`itemdata` 校验/规范化物品，`model/warehouse.go` 定义库存、幂等操作和资产事件。`data/warehouse.go` 建立部分唯一索引，启动初始化 `warehouse.policy`。管理员名单经 `handler/warehouse.go` 接入，完整说明见[共享物品仓库](WAREHOUSE.md)。

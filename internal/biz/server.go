@@ -20,9 +20,10 @@ import (
 )
 
 type ServerBiz struct {
-	userRepo   *repo.UserRepository
-	serverRepo *repo.ServerRepository
-	ids        *sonyflake.Sonyflake
+	businessOperationBiz *BusinessOperationBiz
+	userRepo             *repo.UserRepository
+	serverRepo           *repo.ServerRepository
+	ids                  *sonyflake.Sonyflake
 }
 
 // ServerIdentity 是完成认证后传递给业务处理器的身份，不包含凭证
@@ -49,6 +50,23 @@ type ServerInfo struct {
 // Register 校验管理员及名称后生成凭证，只有数据库写入成功才交付原始密钥
 // actorID 必须来自已认证的管理入口，不能直接信任请求正文中的操作者 ID
 func (serverBiz *ServerBiz) Register(ctx context.Context, actorID int64, name string) (*IssuedServerSecret, error) {
+	issued, err := serverBiz.register(ctx, actorID, name)
+	event := OperationEvent{
+		Operation:   OperationCreateServer,
+		ActorUserID: actorID,
+		TargetType:  "server",
+	}
+	if issued != nil {
+		event.TargetID = issued.ID
+	}
+
+	// 仅记录目标身份和结果，不向审计传递凭据或服务器请求正文
+	serverBiz.businessOperationBiz.Record(ctx, event, err)
+	return issued, err
+}
+
+// register 执行管理员校验、服务器创建与原始凭据交付
+func (serverBiz *ServerBiz) register(ctx context.Context, actorID int64, name string) (*IssuedServerSecret, error) {
 	if err := serverBiz.requireAdmin(ctx, actorID); err != nil {
 		return nil, err
 	}
@@ -78,6 +96,25 @@ func (serverBiz *ServerBiz) Register(ctx context.Context, actorID int64, name st
 
 // SetEnabled 校验管理员后修改服务器可用状态，不改变当前密钥
 func (serverBiz *ServerBiz) SetEnabled(ctx context.Context, actorID, serverID int64, enabled bool) error {
+	err := serverBiz.setEnabled(ctx, actorID, serverID, enabled)
+	operation := OperationDisableServer
+	if enabled {
+		operation = OperationEnableServer
+	}
+	event := OperationEvent{
+		Operation:   operation,
+		ActorUserID: actorID,
+		TargetType:  "server",
+		TargetID:    serverID,
+	}
+
+	// 仅记录目标身份和结果，不向审计传递凭据或服务器请求正文
+	serverBiz.businessOperationBiz.Record(ctx, event, err)
+	return err
+}
+
+// setEnabled 执行管理员校验并保存服务器启用状态
+func (serverBiz *ServerBiz) setEnabled(ctx context.Context, actorID, serverID int64, enabled bool) error {
 	if err := serverBiz.requireAdmin(ctx, actorID); err != nil {
 		return err
 	}
@@ -86,6 +123,21 @@ func (serverBiz *ServerBiz) SetEnabled(ctx context.Context, actorID, serverID in
 
 // RotateSecret 校验管理员并替换密钥，写入失败时不向调用者交付新凭证
 func (serverBiz *ServerBiz) RotateSecret(ctx context.Context, actorID, serverID int64) (*IssuedServerSecret, error) {
+	issued, err := serverBiz.rotateSecret(ctx, actorID, serverID)
+	event := OperationEvent{
+		Operation:   OperationRotateSecret,
+		ActorUserID: actorID,
+		TargetType:  "server",
+		TargetID:    serverID,
+	}
+
+	// 仅记录目标身份和结果，不向审计传递凭据或服务器请求正文
+	serverBiz.businessOperationBiz.Record(ctx, event, err)
+	return issued, err
+}
+
+// rotateSecret 执行管理员校验并替换服务器密钥摘要
+func (serverBiz *ServerBiz) rotateSecret(ctx context.Context, actorID, serverID int64) (*IssuedServerSecret, error) {
 	if err := serverBiz.requireAdmin(ctx, actorID); err != nil {
 		return nil, err
 	}
@@ -98,6 +150,21 @@ func (serverBiz *ServerBiz) RotateSecret(ctx context.Context, actorID, serverID 
 
 // Delete 校验管理员后软删除服务器，后续请求无法再查询到可用凭证
 func (serverBiz *ServerBiz) Delete(ctx context.Context, actorID, serverID int64) error {
+	err := serverBiz.delete(ctx, actorID, serverID)
+	event := OperationEvent{
+		Operation:   OperationDeleteServer,
+		ActorUserID: actorID,
+		TargetType:  "server",
+		TargetID:    serverID,
+	}
+
+	// 仅记录目标身份和结果，不向审计传递凭据或服务器请求正文
+	serverBiz.businessOperationBiz.Record(ctx, event, err)
+	return err
+}
+
+// delete 执行管理员校验并软删除服务器
+func (serverBiz *ServerBiz) delete(ctx context.Context, actorID, serverID int64) error {
 	if err := serverBiz.requireAdmin(ctx, actorID); err != nil {
 		return err
 	}

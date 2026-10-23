@@ -10,6 +10,8 @@ import (
 )
 
 const (
+	ConfigWarehousePolicy = "warehouse.policy" // 完整仓库名单 JSON，替换后从下次中心入库校验生效
+
 	ConfigAuthLoginTimeoutSeconds = "auth.login_timeout_seconds" // 玩家登录时限，单位为秒，只影响之后进入的玩家
 	ConfigAuthMaxFailures         = "auth.max_failures"          // 登录失败次数上限，达到该次数立即进入休息期
 	ConfigAuthCooldownSeconds     = "auth.cooldown_seconds"      // 登录休息时长，单位为秒
