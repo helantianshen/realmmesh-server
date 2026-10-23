@@ -129,7 +129,7 @@ Idle2 的关闭数量与新连接数量近乎对应；分散取出每 4 秒花�
 
 ## 证据、清理与尚未确定事项
 
-[原始分组数据、SQL/连接耗时和等待采样](benchmarks/warehouse-diagnosis-2026-10-24.json)。详细探针、补丁与日志保留在本机 `/tmp/realmmesh-warehouse-diagnosis-yrx_apx8/`；临时目录可能被系统清理。
+[原始分组数据、SQL/连接耗时和等待采样](https://github.com/helantianshen/realmmesh-server/blob/b31a0c0387a38cb7128050010d1e443429a7cee4/docs/benchmarks/warehouse-diagnosis-2026-10-24.json)。详细探针、补丁与日志保留在本机 `/tmp/realmmesh-warehouse-diagnosis-yrx_apx8/`；临时目录可能被系统清理。
 
 共 7 个随机 schema 均清理，运行器复核各臂前后测试 schema 集为空。诊断关闭同步提交只作用于临时连接，断开后消失。测试进程已退出，运行器、编译产物和临时源码运行副本已清理；原工作区业务源码、暂存区和 HEAD 保持不变，没有提交或推送。
 

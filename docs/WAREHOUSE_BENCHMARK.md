@@ -84,20 +84,11 @@
 
 ## 重现与证据
 
-代码：`internal/server/warehouse_load_test.go`，复用 `warehouse_integration_test.go` 的显式 DSN、随机 schema 和正式链路夹具。默认执行会跳过；只有显式启用并提供测试 DSN/输出目录才连接数据库。输出目录须预先存在。
-
-```bash
-# 从 realmmesh-server 根目录运行，DSN 在当前进程环境中安全设置，不写进仓库或日志
-export REALMMESH_WAREHOUSE_LOAD=1
-export REALMMESH_WAREHOUSE_LOAD_OUTPUT="$(mktemp -d /tmp/realmmesh-warehouse-load-XXXXXX)"
-# REALMMESH_WAREHOUSE_TEST_DSN 指向获授权的测试数据库
-# 可选 REALMMESH_WAREHOUSE_LOAD_DURATION=3s；默认 3s，允许 1s 到 1m，固定两轮
-go test ./internal/server -run '^TestWarehouseLoadPostgres$' -count=1 -timeout=15m -v
-```
+测试源码、夹具和原始输出已按用户要求从当前版本清理。历史实现见 [基准源码](https://github.com/helantianshen/realmmesh-server/blob/b31a0c0387a38cb7128050010d1e443429a7cee4/internal/server/warehouse_load_test.go)，以下保留当时的验证结论。
 
 没有预设 SLO，测试退出成功表示夹具和所声明的一致性断言通过，不代表 RPC 零错误。输出错误率、unknown 状态和延迟必须一起审查。
 
-汇总与原始逐格数据见 [JSON 记录](benchmarks/warehouse-2026-10-24.json)。详细临时日志保留在 `/tmp/realmmesh-warehouse-load-s7_xdmv4/`，含探索试跑和审计补充；临时目录可能被系统清理。三个随机 schema 均在结束后清理，运行器复核前后测试 schema 集相同且为空。未操作正式业务表、日常游戏配置或世界；未提交、推送或推进协议引用。测试进程已退出，临时凭据运行器及编译产物已清理，保留基准源码和脱敏结果。
+汇总与原始逐格数据见 [JSON 记录](https://github.com/helantianshen/realmmesh-server/blob/b31a0c0387a38cb7128050010d1e443429a7cee4/docs/benchmarks/warehouse-2026-10-24.json)。详细临时日志保留在 `/tmp/realmmesh-warehouse-load-s7_xdmv4/`，含探索试跑和审计补充；临时目录可能被系统清理。三个随机 schema 均在结束后清理，运行器复核前后测试 schema 集相同且为空。未操作正式业务表、日常游戏配置或世界；未提交、推送或推进协议引用。测试进程已退出，临时凭据运行器及编译产物已清理，历史基准源码和脱敏结果可通过上述提交查阅。
 
 ## 后续超时调查
 
